@@ -1,8 +1,9 @@
 #ifndef STREAMCLIENT_H
 #define STREAMCLIENT_H
 
-extern char *ip_remote;
-extern short port_remote;
+extern int debugl;
+extern ip_t *ip;
+extern port_t *port;
 
 extern void * StreamClient(void *pipefd);
 

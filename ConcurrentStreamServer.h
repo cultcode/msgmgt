@@ -1,8 +1,9 @@
 #ifndef CONCURRENTSERVER_H
 #define CONCURRENTSERVER_H
 
-extern char *ip_local;
-extern short port_local;
+extern int debugl;
+extern ip_t *ip;
+extern port_t *port;
 
 extern void* ConcurrentStreamServer(void *pipefd);
 

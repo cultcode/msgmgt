@@ -1,121 +1,145 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <sys/errno.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
+#include <string.h>
 #include "common.h"
 #include "ConcurrentStreamServer.h"
-
-__attribute__((weak)) int debugl = DEFAULT_DEBUGL;
 
  //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 
 void *ConcurrentStreamServer(void *pipefd)
 {
   int sockfd_listen=-1, sockfd_connect=-1;
-  struct sockaddr_in myaddr={0};
-  int i=0;
-  fd_set readfds;
+  struct sockaddr_in addr_mine={0};
+  fd_set readfds, readfds_temp;
   char buf[HTTP_LEN];
   int length=0;
   int reqfd=0, resfd=0;
-  typeof(ip_local) ip = ip_local;
-  typeof(port_local) port = port_local;
+  ip_t ip_local = ip[IP_INDEX(TCP,LOCAL)];
+  port_t port_local = port[IP_INDEX(TCP,LOCAL)];
+  struct timeval timeout={10,0}, timeout_temp={0};
+  int ret=0;
+  int nPipeReadFlag = 0;
+  int pipefd_so[2]={-1};
 
-  close(((int*)pipefd)[0]);
-  close(((int*)pipefd)[3]);
+  reqfd = ((int*)pipefd)[PIPE_INDEX(REQUEST,WRITE)];
+  resfd = ((int*)pipefd)[PIPE_INDEX(RESPONSE,READ)];
 
-  reqfd = ((int*)pipefd)[1];
-  resfd = ((int*)pipefd)[2];
+  ret = pipe(pipefd_so);
+  handle_error_ret(ret, "pipe()");
 
-  myaddr.sin_family = AF_INET;
-  myaddr.sin_port = htons(port);
+  nPipeReadFlag = fcntl(pipefd_so[0], F_GETFL, 0);
+  nPipeReadFlag |= O_NONBLOCK;
 
-  if( inet_pton(AF_INET, ip, &myaddr.sin_addr) <= 0){
-    fprintf(stderr,"ERROR: inet_pton() failed when convert ip:[%s]\n",ip);
-    exit(1);
-  }
+  ret = fcntl(pipefd_so[0], F_SETFL, nPipeReadFlag);
+  handle_error_ret(ret, "fcntl()");
 
-  if((sockfd_listen = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    perror("socket() The following error occurred");
-    exit(1);
-  }
+  addr_mine.sin_family = AF_INET;
+  inet_pton(AF_INET,ip_local,&addr_mine.sin_addr);
+  addr_mine.sin_port = htons(port_local);
 
-  if(bind(sockfd_listen, (struct sockaddr *)&myaddr, sizeof(struct sockaddr)) < 0) {
-    perror("bind() The following error occurred");
-    exit(1);
-  }
+  sockfd_listen = socket(AF_INET, SOCK_STREAM, 0);
+  handle_error_ret(sockfd_listen, "socket()");
 
-  if(listen(sockfd_listen, 10) < 0) {
-    perror("listen() The following error occurred");
-    exit(1);
-  }
+  ret = bind(sockfd_listen, (struct sockaddr *)&addr_mine, sizeof(struct sockaddr));
+  handle_error_ret(ret, "bind()");
+
+  ret = listen(sockfd_listen, 10);
+  handle_error_ret(ret, "listen()");
 
   FD_ZERO(&readfds);
 
-  FD_SET(sockfd_listen, &readfds);
-  printf("FD_SET sockfd_listen %d\n", sockfd_listen);
+  FD_SET_P(sockfd_listen, &readfds);
 
-  FD_SET(resfd, &readfds);
-  printf("FD_SET response fd %d\n", resfd);
+  FD_SET_P(resfd, &readfds);
 
   while(1) {
 
-    select(FD_SETSIZE,&readfds, NULL, NULL, NULL);
+    timeout_temp = timeout;
+    readfds_temp = readfds;
+
+    ret = select(FD_SETSIZE, &readfds_temp, NULL, NULL, NULL);
+    handle_error_ret(ret, "ConcurrentStreamServer() select()");
+
+    if(ret == 0) {
+      fprintf(stderr,"ERROR:ConcurrentStreamServer() select() timeout\n");
+      exit(-1);
+    }
 
     //monitor sockfd_listen
-    if(FD_ISSET(sockfd_listen, &readfds)) {
+    if(FD_ISSET(sockfd_listen, &readfds_temp)) {
 
 
-      if((sockfd_connect = accept(sockfd_listen, (struct sockaddr *)NULL, NULL)) < 0) {
-        perror("accept() The following error occurred");
-        exit(1);
-      }
+      sockfd_connect = accept(sockfd_listen, (struct sockaddr *)NULL, NULL);
+      handle_error_ret(sockfd_connect, "accept()");
 
-      FD_SET(sockfd_connect, &readfds);
-      printf("FD_SET sockfd_connect %d\n", sockfd_connect);
+      FD_SET_P(sockfd_connect, &readfds);
     }
     //monitor response fd
-    else if(FD_ISSET(resfd, &readfds)) {
-      i = resfd;
+    else if(FD_ISSET(resfd, &readfds_temp)) {
 
-      length = read(i, buf, sizeof(buf)-1);
-      if(length == -1) {
-        perror("read()");
-        exit(-1);
-      }
-      else if(length == 0) {
-        close(i);
-        FD_CLR(i, &readfds);
-        printf("FD_CLR fd %d\n", i);
+      length = read(resfd, buf, sizeof(buf)-1);
+      handle_error_ret(length, "read()");
+
+      if(length == 0) {
+        close(resfd);
+        FD_CLR_P(resfd, &readfds);
       }
       else {
         //deal with http packet
-        printf("received from %d:%s\n",i,buf);
-        //write();
+        printf("%s(): received from %d:\n%s\n",__FUNCTION__,resfd,buf);
+
+        length = read(pipefd_so[0],&sockfd_connect,sizeof(sockfd_connect));
+        handle_error_ret(length, "read() pipefd_so");
+
+        if(length == 0) {
+          fprintf(stderr,"pipefd_so closed\n");
+          exit(-1);
+        }
+        else{
+          printf("%s(): %d poped out from pipefd_so\n",__FUNCTION__,sockfd_connect);
+
+          if(length == sizeof(errno)) {
+            //this http request timed out
+          }
+          else {
+            length = write(sockfd_connect,buf,strlen(buf));
+            handle_error_ret(length, "write()");
+          }
+        }
       }
     }
     //monitor all sockfd_connect
     else {
-      for(i=0; i< FD_SETSIZE; i++) {
-        if(!FD_ISSET(i, &readfds)) continue; 
+      for(sockfd_connect=0; sockfd_connect< FD_SETSIZE; sockfd_connect++) {
+        if(!FD_ISSET(sockfd_connect, &readfds_temp)) continue; 
 
-        length = read(i, buf, sizeof(buf)-1);
-        if(length == -1) {
-          perror("read()");
-          exit(-1);
+        length = read(sockfd_connect, buf, sizeof(buf)-1);
+        handle_error_ret(length, "read()");
+
+        if(length == 0) {
+          close(sockfd_connect);
+          FD_CLR_P(sockfd_connect, &readfds);
         }
-        else if(length == 0) {
-          close(i);
-          FD_CLR(i, &readfds);
-          printf("FD_CLR fd %d\n", i);
+        else if(length == (sizeof(buf)-1)) {
+          fprintf(stderr,"ERROR: http request is too large to store\n");
+          exit(-1);
         }
         else {
           //deal with http packet
-          printf("received from %d:%s\n",i,buf);
-          write(reqfd, buf, sizeof(buf)-1);
+          printf("%s(): received from %d:\n%s\n",__FUNCTION__,sockfd_connect,buf);
+
+          length = write(reqfd, buf, sizeof(buf)-1);
+          handle_error_ret(length, "write()");
+
+          length = write(pipefd_so[1],&sockfd_connect,sizeof(sockfd_connect));
+          handle_error_ret(length, "write()");
         }
       }
     }
