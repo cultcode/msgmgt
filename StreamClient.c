@@ -14,7 +14,7 @@ int EstablishConnect(ip_t ip, port_t port, int type)
 {
   int    sockfd=-1;
   struct sockaddr_in    addr_ser={0};
-  struct timeval timeout={10,0};
+  struct timeval timeout={60,0};
   int ret=0;
 
   addr_ser.sin_family = AF_INET;
@@ -22,23 +22,23 @@ int EstablishConnect(ip_t ip, port_t port, int type)
   addr_ser.sin_port = htons(port);
 
   sockfd = socket(AF_INET, type, 0);
-  handle_error_ret(sockfd, "socket()");
+  handle_error_nn(sockfd, "TRANSMIT","socket()");
 
-  ret = setsockopt(sockfd,SOL_SOCKET,SO_SNDTIMEO,(char*)&timeout,sizeof(struct timeval));
-  handle_error_ret(ret, "setsockopt()");
+  //ret = setsockopt(sockfd,SOL_SOCKET,SO_SNDTIMEO,(char*)&timeout,sizeof(struct timeval));
+  //handle_error_nn(ret, "TRANSMIT","setsockopt()");
 
-  ret = setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
-  handle_error_ret(ret, "setsockopt()");
+  //ret = setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
+  //handle_error_nn(ret, "TRANSMIT","setsockopt()");
 
   if (debugl >= 1) {
-    printf("%s(): Connecting to server[%s:%hd]......\n",__FUNCTION__, ip,port);
+    log4c_cdn(mycat, info, "TRANSMIT", "Connecting to server[%s:%hd]", ip,port);
   }
 
   ret = connect(sockfd, (struct sockaddr*)&addr_ser, sizeof(addr_ser));
-  handle_error_ret(ret, "setsockopt()");
+  handle_error_nn(ret, "TRANSMIT","setsockopt()");
 
   if (debugl >= 1) {
-    printf("%s(): Connected\n",__FUNCTION__);
+    log4c_cdn(mycat, info, "TRANSMIT", "Connected");
   }
 
   return sockfd;
@@ -76,29 +76,20 @@ void *StreamClient(void *pipefd)
     readfds_temp = readfds;
 
     ret = select(FD_SETSIZE, &readfds_temp, NULL, NULL, NULL);
-    handle_error_ret(ret, "StreamClient() select()");
+    handle_error_nn(ret, "TRANSMIT","StreamClient() select()");
 
     if(ret == 0) {
-      fprintf(stderr,"ERROR:StreamClient() select() timeout\n");
+      log4c_cdn(mycat, error, "TRANSMIT", "select() timeout");
       exit(-1);
     }
 
     //monitor sockfd_connect
     if(FD_ISSET(sockfd_connect, &readfds_temp)) {
       length = read(sockfd_connect, buf, sizeof(buf)-1);
+      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d, length=%d", sockfd_connect, length);
+      handle_error_nn(length, "TRANSMIT","read()");
 
-      if(length == -1) {
-        if(errno == EAGAIN) {
-          sprintf(buf,"%d",errno);
-
-          length = write(resfd, buf, sizeof(buf)-1);
-          handle_error_ret(length, "write()");
-        }
-        else {
-          handle_error("read()");
-        }
-      }
-      else if(length == 0) {
+      if(length == 0) {
         close(sockfd_connect);
         FD_CLR_P(sockfd_connect, &readfds);
 
@@ -106,15 +97,16 @@ void *StreamClient(void *pipefd)
         FD_SET_P(sockfd_connect, &readfds);
       }
       else if(length == (sizeof(buf)-1)) {
-        fprintf(stderr,"ERROR: http response is too large to store\n");
+        log4c_cdn(mycat, error, "socket", "http response is too large to store");
         exit(-1);
       }
       else {
         //deal with http packet
-        printf("%s(): received from %d:\n%s\n",__FUNCTION__,sockfd_connect,buf);
+        //log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",buf);
 
         length = write(resfd, buf, sizeof(buf)-1);
-        handle_error_ret(length, "write()");
+        log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=resfd, sockfd=%d, length=%d", resfd,length);
+        handle_error_nn(length, "TRANSMIT","write()");
       }
 
       if(!FD_ISSET(reqfd, &readfds)) {
@@ -124,7 +116,8 @@ void *StreamClient(void *pipefd)
     //monitor request fd
     else if(FD_ISSET(reqfd, &readfds_temp)) {
       length = read(reqfd, buf, sizeof(buf)-1);
-      handle_error_ret(length, "read()");
+      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=reqfd, sockfd=%d length=%d", reqfd, length);
+      handle_error_nn(length, "TRANSMIT","read()");
 
       if(length == 0) {
         close(reqfd);
@@ -132,13 +125,13 @@ void *StreamClient(void *pipefd)
       }
       else {
         //deal with http packet
-        printf("%s(): received from %d:\n%s\n",__FUNCTION__, reqfd,buf);
+        //log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",buf);
 
         length = write(sockfd_connect, buf, strlen(buf));
-        handle_error_ret(length,"write()");
+        log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
+        handle_error_nn(length,"TRANSMIT","write()");
       }
 
-      FD_CLR_P(reqfd, &readfds);
     }
   }
   return NULL;

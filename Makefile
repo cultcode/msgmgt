@@ -1,12 +1,15 @@
 CFLAGS=-Wall -g
 
-SRCS=ConcurrentStreamServer.c StreamClient.c RoundGramServer.c main.c
+HASHDIR = ../uthash/src
+CFLAGS += -I$(HASHDIR)
 
-HEADERS=ConcurrentStreamServer.h StreamClient.h RoundGramServer.h main.h common.h
+SRCS=http_parser.c http_parser_package.c ConcurrentStreamServer.c StreamClient.c RoundGramServer.c main.c
+
+HEADERS=$(HASHDIR)/uthash.h http_parser.h http_parser_package.h ConcurrentStreamServer.h StreamClient.h RoundGramServer.h main.h common.h
 
 TARGET=MsgAgentSvr
 $(TARGET):$(SRCS) $(HEADERS)
-	gcc -o $@ $(CFLAGS) $(SRCS) -DDEFAULT_DEBUGL=3 -lpthread
+	gcc $(CFLAGS) -o $@ $(SRCS) -DDEFAULT_DEBUGL=3 -lpthread -ldl
 
 clean:
 	rm -rf $(TARGET)

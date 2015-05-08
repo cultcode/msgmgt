@@ -8,10 +8,35 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <libgen.h>
+#include <sys/queue.h>
 #include "common.h"
 #include "ConcurrentStreamServer.h"
+#include "http_parser.h"
+#include "http_parser_package.h"
+#include "uthash.h"
+
+#define HTTP_LEN 4096
+#define HASH_KEY_LEN 256
+#define INTERFACE_LEN 256
+
+struct my_struct {
+    char name[HASH_KEY_LEN];             /* key (string is WITHIN the structure) */
+    int id;
+    UT_hash_handle hh;         /* makes this structure hashable */
+};
+static struct my_struct *users=NULL;
+
+struct tailq_entry_svrinit {
+    char value[HTTP_LEN];
+    struct my_struct *record;
+    TAILQ_ENTRY(tailq_entry_svrinit) tailq_entry;
+};
+TAILQ_HEAD(, tailq_entry_svrinit) tailq_svrinit_head;
 
  //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+static struct message message_response;
+static struct message message_request;
 
 void *ConcurrentStreamServer(void *pipefd)
 {
@@ -25,33 +50,40 @@ void *ConcurrentStreamServer(void *pipefd)
   port_t port_local = port[IP_INDEX(TCP,LOCAL)];
   struct timeval timeout={10,0}, timeout_temp={0};
   int ret=0;
-  int nPipeReadFlag = 0;
-  int pipefd_so[2]={-1};
+  //int nPipeReadFlag = 0;
+  //int pipefd_so[2]={-1};
+  int i=0;
+  struct my_struct *s=NULL, *tmp=NULL;
+  char *key=NULL;
+  char *url=NULL, *cookie=NULL;
+  struct tailq_entry_svrinit *item;
+
+  TAILQ_INIT(&tailq_svrinit_head);
 
   reqfd = ((int*)pipefd)[PIPE_INDEX(REQUEST,WRITE)];
   resfd = ((int*)pipefd)[PIPE_INDEX(RESPONSE,READ)];
 
-  ret = pipe(pipefd_so);
-  handle_error_ret(ret, "pipe()");
-
-  nPipeReadFlag = fcntl(pipefd_so[0], F_GETFL, 0);
-  nPipeReadFlag |= O_NONBLOCK;
-
-  ret = fcntl(pipefd_so[0], F_SETFL, nPipeReadFlag);
-  handle_error_ret(ret, "fcntl()");
+//  ret = pipe(pipefd_so);
+//  handle_error_nn(ret, "pipe()");
+//
+//  nPipeReadFlag = fcntl(pipefd_so[0], F_GETFL, 0);
+//  nPipeReadFlag |= O_NONBLOCK;
+//
+//  ret = fcntl(pipefd_so[0], F_SETFL, nPipeReadFlag);
+//  handle_error_nn(ret, "fcntl()");
 
   addr_mine.sin_family = AF_INET;
   inet_pton(AF_INET,ip_local,&addr_mine.sin_addr);
   addr_mine.sin_port = htons(port_local);
 
   sockfd_listen = socket(AF_INET, SOCK_STREAM, 0);
-  handle_error_ret(sockfd_listen, "socket()");
+  handle_error_nn(sockfd_listen, "TRANSMIT", "socket()");
 
   ret = bind(sockfd_listen, (struct sockaddr *)&addr_mine, sizeof(struct sockaddr));
-  handle_error_ret(ret, "bind()");
+  handle_error_nn(ret, "TRANSMIT", "bind()");
 
   ret = listen(sockfd_listen, 10);
-  handle_error_ret(ret, "listen()");
+  handle_error_nn(ret, "TRANSMIT", "listen()");
 
   FD_ZERO(&readfds);
 
@@ -60,24 +92,24 @@ void *ConcurrentStreamServer(void *pipefd)
   FD_SET_P(resfd, &readfds);
 
   while(1) {
+    memset(&message_response, 0, sizeof(message_response));
+    memset(&message_request,  0, sizeof(message_request));
 
     timeout_temp = timeout;
     readfds_temp = readfds;
 
     ret = select(FD_SETSIZE, &readfds_temp, NULL, NULL, NULL);
-    handle_error_ret(ret, "ConcurrentStreamServer() select()");
+    handle_error_nn(ret, "TRANSMIT", "ConcurrentStreamServer() select()");
 
     if(ret == 0) {
-      fprintf(stderr,"ERROR:ConcurrentStreamServer() select() timeout\n");
+      log4c_cdn(mycat, error, "TRANSMIT", "select() timeout");
       exit(-1);
     }
 
     //monitor sockfd_listen
     if(FD_ISSET(sockfd_listen, &readfds_temp)) {
-
-
       sockfd_connect = accept(sockfd_listen, (struct sockaddr *)NULL, NULL);
-      handle_error_ret(sockfd_connect, "accept()");
+      handle_error_nn(sockfd_connect, "TRANSMIT", "accept()");
 
       FD_SET_P(sockfd_connect, &readfds);
     }
@@ -85,7 +117,8 @@ void *ConcurrentStreamServer(void *pipefd)
     else if(FD_ISSET(resfd, &readfds_temp)) {
 
       length = read(resfd, buf, sizeof(buf)-1);
-      handle_error_ret(length, "read()");
+      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=resfd, sockfd=%d length=%d", resfd, length);
+      handle_error_nn(length, "TRANSMIT", "read()");
 
       if(length == 0) {
         close(resfd);
@@ -93,26 +126,69 @@ void *ConcurrentStreamServer(void *pipefd)
       }
       else {
         //deal with http packet
-        printf("%s(): received from %d:\n%s\n",__FUNCTION__,resfd,buf);
+        //log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",buf);
 
-        length = read(pipefd_so[0],&sockfd_connect,sizeof(sockfd_connect));
-        handle_error_ret(length, "read() pipefd_so");
+        message_response.raw = buf;
+        parse_messages(HTTP_RESPONSE, 1, &message_response);
 
-        if(length == 0) {
-          fprintf(stderr,"pipefd_so closed\n");
-          exit(-1);
-        }
-        else{
-          printf("%s(): %d poped out from pipefd_so\n",__FUNCTION__,sockfd_connect);
+        for(i=0; i<message_response.num_headers; i++) {
+          if(!strcasecmp(message_response.headers[i][0], "Set-Cookie" )) {
 
-          if(length == sizeof(errno)) {
-            //this http request timed out
+            cookie = calloc(1, strlen(message_response.headers[i][1])+1);
+            strcpy(cookie,message_response.headers[i][1]);
+            key = strstr(cookie,"Interface=");
+            key += strlen("Interface=");
+
+            HASH_FIND_STR( users, key, s);
+
+            if(s == NULL) {
+              log4c_cdn(mycat, error, "HASH", "%s=>NULL found from hash", key);
+              exit(1);
+            }
+            else {
+              sockfd_connect = s->id;
+              log4c_cdn(mycat, info, "HASH", "%s=>%d found from hash",key, s->id);
+            }
+
+
+            if(!strcasecmp(key,"svrinit")) {
+              item = TAILQ_FIRST(&tailq_svrinit_head);
+              log4c_cdn(mycat, info, "QUEUE", "entry removed from TAILQ svrinit");
+              TAILQ_REMOVE(&tailq_svrinit_head, item, tailq_entry);
+            }
+
+            free(cookie);
+
+            break;
           }
-          else {
+        }
+
+        if(i >= message_response.num_headers) {
+          log4c_cdn(mycat, error, "TRANSMIT", "set-cookie not found");
+          log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",message_response.raw);
+          exit(1);
+        }
+        /* get destination ID*/
+
+//        length = read(pipefd_so[0],&sockfd_connect,sizeof(sockfd_connect));
+//        handle_error_nn(length, "TRANSMIT", "read() pipefd_so");
+//
+//        if(length == 0) {
+//          fprintf(stderr,"pipefd_so closed\n");
+//          exit(-1);
+//        }
+//        else{
+//          printf("%s(): %d poped out from pipefd_so\n",__FUNCTION__,sockfd_connect);
+//
+//          if(length == sizeof(errno)) {
+//            //this http request timed out
+//          }
+//          else {
             length = write(sockfd_connect,buf,strlen(buf));
-            handle_error_ret(length, "write()");
-          }
-        }
+            log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
+            handle_error_nn(length, "TRANSMIT", "write()");
+//          }
+//        }
       }
     }
     //monitor all sockfd_connect
@@ -121,27 +197,85 @@ void *ConcurrentStreamServer(void *pipefd)
         if(!FD_ISSET(sockfd_connect, &readfds_temp)) continue; 
 
         length = read(sockfd_connect, buf, sizeof(buf)-1);
-        handle_error_ret(length, "read()");
+        log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d length=%d", sockfd_connect, length);
+        handle_error_nn(length, "TRANSMIT", "read()");
 
         if(length == 0) {
           close(sockfd_connect);
           FD_CLR_P(sockfd_connect, &readfds);
+
+          HASH_ITER(hh, users, s, tmp) {
+            if(s->id == sockfd_connect) {
+              log4c_cdn(mycat, info, "HASH", "entry %s=>%d removed from HASH", s->name, s->id);
+              HASH_DEL( users, s);
+              free(s);
+            }
+          }
         }
         else if(length == (sizeof(buf)-1)) {
-          fprintf(stderr,"ERROR: http request is too large to store\n");
+          log4c_cdn(mycat, error, "TRANSMIT", "http request is too large to store");
           exit(-1);
         }
         else {
           //deal with http packet
-          printf("%s(): received from %d:\n%s\n",__FUNCTION__,sockfd_connect,buf);
+        //log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",buf);
 
-          length = write(reqfd, buf, sizeof(buf)-1);
-          handle_error_ret(length, "write()");
+        /* get source ID */
+          message_request.raw = buf;
+          parse_messages(HTTP_REQUEST, 1, &message_request);
 
-          length = write(pipefd_so[1],&sockfd_connect,sizeof(sockfd_connect));
-          handle_error_ret(length, "write()");
+          url = calloc(1, strlen(message_request.request_url)+1);
+          strcpy(url, message_request.request_url);
+          key = basename(url);
+
+//          printf("===============HASH=================\n");
+//          HASH_ITER(hh, users, s, tmp) {
+//            printf("%s:%d\n", s->name, s->id);
+//          }
+
+          //construct hash entry
+          s = (struct my_struct*)calloc(1, sizeof(struct my_struct));
+          s->id = sockfd_connect;
+          strcpy(s->name, key);
+
+          //put HTTP package & hash entry into queue
+          if(!strcasecmp(key, "svrinit")) {
+            item = calloc(1, sizeof(struct tailq_entry_svrinit));
+            strcpy(item->value, buf);
+            item->record = s;
+            TAILQ_INSERT_TAIL(&tailq_svrinit_head, item, tailq_entry);
+            log4c_cdn(mycat, info, "QUEUE", "entry added into TAILQ svrinit");
+          }
+          else {
+            //HASH_REPLACE_STR(head,keyfield_name, item_ptr, replaced_item_ptr)
+            HASH_REPLACE_STR( users, name, s, tmp );
+            free(tmp);
+            log4c_cdn(mycat, info, "HASH", "%s added into HASH", s->name);
+
+            length = write(reqfd, buf, sizeof(buf)-1);
+            log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+            handle_error_nn(length, "TRANSMIT", "write()");
+          }
+
+//          length = write(pipefd_so[1],&sockfd_connect,sizeof(sockfd_connect));
+//          handle_error_nn(length, "TRANSMIT", "write()");
+
+          free(url);
         }
       }
+    }
+
+    item = TAILQ_FIRST(&tailq_svrinit_head);
+    if((item != NULL) && (TAILQ_NEXT(item, tailq_entry) == NULL))  {
+      s = item->record;
+
+      HASH_REPLACE_STR( users, name, s, tmp);
+      free(tmp);
+      log4c_cdn(mycat, info, "HASH", "entry %s=>%d added into HASH", s->name, s->id);
+
+      length = write(reqfd, item->value, sizeof(buf)-1);
+      log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+      handle_error_nn(length, "TRANSMIT", "write()");
     }
   }
 

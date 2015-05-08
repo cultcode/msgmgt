@@ -3,6 +3,17 @@
 
 extern int debugl;
 
+#define log4c_cdn(a_category, a_priority, a_void, a_format, args...) \
+  (*log4c_category_userloc_##a_priority)(a_category, __FILE__, __LINE__, a_void, a_format , ## args );
+extern int (*log4c_init)(void);  
+extern void* (*log4c_category_get)(const char* a_name);
+extern void (*log4c_category_userloc_error)( const void* a_category, char* file, int   line, void* a_void, const char* a_format, ...);
+extern void (*log4c_category_userloc_warn )( const void* a_category, char* file, int   line, void* a_void, const char* a_format, ...);
+extern void (*log4c_category_userloc_info )( const void* a_category, char* file, int   line, void* a_void, const char* a_format, ...);
+extern void (*log4c_category_userloc_debug)( const void* a_category, char* file, int   line, void* a_void, const char* a_format, ...); 
+extern int (*log4c_fini)(void);
+extern void* mycat;
+
 #define HTTP_LEN 4096
 #define BUF_LEN  10
 
@@ -42,23 +53,20 @@ typedef struct HttpBuf_s {
 
 #define FD_SET_P(a,b) \
   FD_SET((a),(b));\
-  if(debugl >= 3) {\
-    printf("%s() : FD_SET fd(%s) %d\n", __FUNCTION__, ""#a"", (a));\
-  }
+  log4c_cdn(mycat, info, "TRANSMIT", "FD_SET %d(%s)", (a), ""#a"");
+  
 
 #define FD_CLR_P(a,b) \
   FD_CLR((a),(b));\
-  if(debugl >= 3) {\
-    printf("%s() : FD_CLR fd(%s) %d\n", __FUNCTION__, ""#a"", (a));\
-  }
+  log4c_cdn(mycat, info, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
 
-#define handle_error( msg) \
-  do { perror(msg); exit(EXIT_FAILURE); } while (0);
+#define handle_error(CODE, MSG) \
+  do { log4c_cdn(mycat, error, CODE, MSG); exit(EXIT_FAILURE); } while (0);
 
-#define handle_error_en(en, msg) \
-  do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0);
+#define handle_error_pn(ret, CODE, MSG) \
+  if(ret > 0) {handle_error(CODE, MSG)}
 
-#define handle_error_ret(ret, msg) \
-  if(ret < 0) {handle_error(msg)}
+#define handle_error_nn(ret, CODE, MSG) \
+  if(ret < 0) {handle_error(CODE, MSG)}
 
 #endif
