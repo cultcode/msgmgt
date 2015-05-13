@@ -6,22 +6,19 @@
 #include <string.h>
 #include <assert.h>
 #include <dlfcn.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <libgen.h>
+#include <curl/curl.h>  
 
 #include "common.h"
+#include "OperateXml.h"
+#include "InitNodeStatus.h"
 #include "ConcurrentStreamServer.h"
 #include "StreamClient.h"
 #include "RoundGramServer.h"
 #include "http_parser_package.h"
-
-int debugl = DEFAULT_DEBUGL;
-
-/*********************************************************
- *     local remote 
- * tcp   0     1
- * udp   2     3
- ********************************************************/
-ip_t *ip;
-port_t *port;
 
 int (*log4c_init)(void); 
 void* (*log4c_category_get)(const char* a_name);
@@ -43,25 +40,74 @@ int main(int argc, char **argv)
   void *handle;  
   char *error;  
 
-/*********************************************************
- * parse config
+  char **options=NULL;
+  char ConfigXml[FN_LEN] = {0};
+  int argcount=0;
+  struct stat laststat={0}, tempstat={0};
+  int ArgMode=0;
+  int i=0;
+
+  char *path0 = NULL, *path1=NULL;;
+
+/********************************************************
+ * initialization
  ********************************************************/
-  assert(argc == 5);
+  path0 = strdup(argv[0]);
+  path1 = strdup(argv[0]);
+  SelfBaseName=basename(path0);
+  SelfDirName=dirname(path1);
 
-  ip = calloc(sizeof(ip_t),IP_INDEX_MAX);
-  port = calloc(sizeof(port_t),IP_INDEX_MAX);
+/********************************************************
+ * parse xml
+ ********************************************************/
+  if((argc == 1) || ((argc==2) &&(argv[1][0] != '-'))) {
+    if(argc == 1) {
+      strcpy(ConfigXml,argv[0]);
+      strcat(ConfigXml,".config");
+    }else {
+      strcpy(ConfigXml,argv[1]);
+    }
 
-  ip[IP_INDEX(TCP,LOCAL)] = argv[1];
-  port[IP_INDEX(TCP,LOCAL)] = atoi(argv[2]);
+    if(stat(ConfigXml, &tempstat) != -1) {
+      ArgMode = 1;
+      goto GET_ARGUMENTS_XML;
+    }
+    else {
+      fprintf(stderr,"ERROR: Neither cmdline arguments nor .xml provieded\n");
+      exit(1);
+    }
+  }
+  else {
+    ArgMode = 0;
+    ret = ParseOptions(argc, argv);
 
-  ip[IP_INDEX(UDP,LOCAL)] = ip[IP_INDEX(TCP,LOCAL)];
-  port[IP_INDEX(UDP,LOCAL)] = port[IP_INDEX(TCP,LOCAL)];
+    if(ret) {
+      exit(1);
+    }
+    goto GET_ARGUMENTS_END;
+  }
 
-  ip[IP_INDEX(TCP,REMOTE)] = argv[3];
-  port[IP_INDEX(TCP,REMOTE)] = atoi(argv[4]);
+GET_ARGUMENTS_XML:
+  memcpy(&laststat,&tempstat, sizeof(struct stat));
 
-  ip[IP_INDEX(UDP,REMOTE)] = ip[IP_INDEX(TCP,REMOTE)];
-  port[IP_INDEX(UDP,REMOTE)] = port[IP_INDEX(TCP,REMOTE)];
+  if((argcount = ReadConfigXml(ConfigXml, &options)) <= 0) {
+    //exit(1);
+  }
+  else {
+    ret = ParseOptions(argcount, options);
+
+    for(i=0;i<argcount;i++) {
+      free(options[i]);
+    }
+    free(options);
+    options = NULL;
+
+    if(ret) {
+      //exit(1);
+    }
+  }
+
+GET_ARGUMENTS_END:
 
 /*********************************************************
  * import log4c functions
@@ -87,9 +133,17 @@ int main(int argc, char **argv)
   
   /* call log4c functions */
   (*log4c_init)();
-  mycat = (*log4c_category_get)("application1");
+  mycat = (*log4c_category_get)(SelfBaseName);
   
   log4c_cdn(mycat, info, "LOG4C", "log4c loaded");	      
+
+
+/*********************************************************
+ * POST to SvrInit
+ ********************************************************/
+  if(url[0] && strlen(url[0])) {
+    InitNodeStatus();
+  }
 
 /*********************************************************
  * create pipe

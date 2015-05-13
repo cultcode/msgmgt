@@ -43,11 +43,11 @@ void *ConcurrentStreamServer(void *pipefd)
   int sockfd_listen=-1, sockfd_connect=-1;
   struct sockaddr_in addr_mine={0};
   fd_set readfds, readfds_temp;
-  char buf[HTTP_LEN];
+  char buf[HTTP_LEN]={0};
   int length=0;
   int reqfd=0, resfd=0;
-  ip_t ip_local = ip[IP_INDEX(TCP,LOCAL)];
-  port_t port_local = port[IP_INDEX(TCP,LOCAL)];
+  ip_t ip_local = ip[TCP][LOCAL];
+  port_t port_local = port[TCP][LOCAL];
   struct timeval timeout={10,0}, timeout_temp={0};
   int ret=0;
   //int nPipeReadFlag = 0;
@@ -116,8 +116,9 @@ void *ConcurrentStreamServer(void *pipefd)
     //monitor response fd
     else if(FD_ISSET(resfd, &readfds_temp)) {
 
+      memset(buf,0,sizeof(buf));
       length = read(resfd, buf, sizeof(buf)-1);
-      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=resfd, sockfd=%d length=%d", resfd, length);
+      log4c_cdn(mycat, debug, "TRANSMIT", "receiving packet, source=resfd, sockfd=%d length=%d", resfd, length);
       handle_error_nn(length, "TRANSMIT", "read()");
 
       if(length == 0) {
@@ -126,7 +127,7 @@ void *ConcurrentStreamServer(void *pipefd)
       }
       else {
         //deal with http packet
-        //log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",buf);
+        log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
         message_response.raw = buf;
         parse_messages(HTTP_RESPONSE, 1, &message_response);
@@ -147,13 +148,13 @@ void *ConcurrentStreamServer(void *pipefd)
             }
             else {
               sockfd_connect = s->id;
-              log4c_cdn(mycat, info, "HASH", "%s=>%d found from hash",key, s->id);
+              log4c_cdn(mycat, debug, "HASH", "%s=>%d found from hash",key, s->id);
             }
 
 
             if(!strcasecmp(key,"svrinit")) {
               item = TAILQ_FIRST(&tailq_svrinit_head);
-              log4c_cdn(mycat, info, "QUEUE", "entry removed from TAILQ svrinit");
+              log4c_cdn(mycat, debug, "QUEUE", "entry removed from TAILQ svrinit");
               TAILQ_REMOVE(&tailq_svrinit_head, item, tailq_entry);
             }
 
@@ -164,31 +165,17 @@ void *ConcurrentStreamServer(void *pipefd)
         }
 
         if(i >= message_response.num_headers) {
-          log4c_cdn(mycat, error, "TRANSMIT", "set-cookie not found");
-          log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",message_response.raw);
-          exit(1);
+          log4c_cdn(mycat, error, "TRANSMIT", "set-cookie not found, HTTP packet discarded");
+          log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",message_response.raw);
+          //exit(1);
         }
         /* get destination ID*/
 
-//        length = read(pipefd_so[0],&sockfd_connect,sizeof(sockfd_connect));
-//        handle_error_nn(length, "TRANSMIT", "read() pipefd_so");
-//
-//        if(length == 0) {
-//          fprintf(stderr,"pipefd_so closed\n");
-//          exit(-1);
-//        }
-//        else{
-//          printf("%s(): %d poped out from pipefd_so\n",__FUNCTION__,sockfd_connect);
-//
-//          if(length == sizeof(errno)) {
-//            //this http request timed out
-//          }
-//          else {
-            length = write(sockfd_connect,buf,strlen(buf));
-            log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
-            handle_error_nn(length, "TRANSMIT", "write()");
-//          }
-//        }
+        else {
+          length = write(sockfd_connect,buf,strlen(buf));
+          log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
+          handle_error_nn(length, "TRANSMIT", "write()");
+        }
       }
     }
     //monitor all sockfd_connect
@@ -196,6 +183,7 @@ void *ConcurrentStreamServer(void *pipefd)
       for(sockfd_connect=0; sockfd_connect< FD_SETSIZE; sockfd_connect++) {
         if(!FD_ISSET(sockfd_connect, &readfds_temp)) continue; 
 
+        memset(buf,0,sizeof(buf));
         length = read(sockfd_connect, buf, sizeof(buf)-1);
         log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d length=%d", sockfd_connect, length);
         handle_error_nn(length, "TRANSMIT", "read()");
@@ -206,7 +194,7 @@ void *ConcurrentStreamServer(void *pipefd)
 
           HASH_ITER(hh, users, s, tmp) {
             if(s->id == sockfd_connect) {
-              log4c_cdn(mycat, info, "HASH", "entry %s=>%d removed from HASH", s->name, s->id);
+              log4c_cdn(mycat, debug, "HASH", "entry %s=>%d removed from HASH", s->name, s->id);
               HASH_DEL( users, s);
               free(s);
             }
@@ -218,7 +206,7 @@ void *ConcurrentStreamServer(void *pipefd)
         }
         else {
           //deal with http packet
-        //log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is %s",buf);
+        log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
         /* get source ID */
           message_request.raw = buf;
@@ -244,16 +232,16 @@ void *ConcurrentStreamServer(void *pipefd)
             strcpy(item->value, buf);
             item->record = s;
             TAILQ_INSERT_TAIL(&tailq_svrinit_head, item, tailq_entry);
-            log4c_cdn(mycat, info, "QUEUE", "entry added into TAILQ svrinit");
+            log4c_cdn(mycat, debug, "QUEUE", "entry added into TAILQ svrinit");
           }
           else {
             //HASH_REPLACE_STR(head,keyfield_name, item_ptr, replaced_item_ptr)
             HASH_REPLACE_STR( users, name, s, tmp );
             free(tmp);
-            log4c_cdn(mycat, info, "HASH", "%s added into HASH", s->name);
+            log4c_cdn(mycat, debug, "HASH", "%s added into HASH", s->name);
 
             length = write(reqfd, buf, sizeof(buf)-1);
-            log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+            log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
             handle_error_nn(length, "TRANSMIT", "write()");
           }
 
@@ -271,10 +259,10 @@ void *ConcurrentStreamServer(void *pipefd)
 
       HASH_REPLACE_STR( users, name, s, tmp);
       free(tmp);
-      log4c_cdn(mycat, info, "HASH", "entry %s=>%d added into HASH", s->name, s->id);
+      log4c_cdn(mycat, debug, "HASH", "entry %s=>%d added into HASH", s->name, s->id);
 
       length = write(reqfd, item->value, sizeof(buf)-1);
-      log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+      log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
       handle_error_nn(length, "TRANSMIT", "write()");
     }
   }

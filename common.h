@@ -1,8 +1,6 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-extern int debugl;
-
 #define log4c_cdn(a_category, a_priority, a_void, a_format, args...) \
   (*log4c_category_userloc_##a_priority)(a_category, __FILE__, __LINE__, a_void, a_format , ## args );
 extern int (*log4c_init)(void);  
@@ -30,9 +28,6 @@ enum {
   REMOTE=1
 };
 
-#define IP_INDEX(a,b) (((a)<<1)|(b))
-#define IP_INDEX_MAX 4
-
 enum {
   REQUEST=0,
   RESPONSE=1
@@ -46,19 +41,14 @@ enum {
 #define PIPE_INDEX(a,b) (((a)<<1)|(b))
 #define PIPE_INDEX_MAX 4
 
-typedef struct HttpBuf_s {
-  char buf[HTTP_LEN];
-  int  fd;
-} HttpBuf_t;
-
 #define FD_SET_P(a,b) \
   FD_SET((a),(b));\
-  log4c_cdn(mycat, info, "TRANSMIT", "FD_SET %d(%s)", (a), ""#a"");
+  log4c_cdn(mycat, debug, "TRANSMIT", "FD_SET %d(%s)", (a), ""#a"");
   
 
 #define FD_CLR_P(a,b) \
   FD_CLR((a),(b));\
-  log4c_cdn(mycat, info, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
+  log4c_cdn(mycat, debug, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
 
 #define handle_error(CODE, MSG) \
   do { log4c_cdn(mycat, error, CODE, MSG); exit(EXIT_FAILURE); } while (0);
@@ -69,4 +59,35 @@ typedef struct HttpBuf_s {
 #define handle_error_nn(ret, CODE, MSG) \
   if(ret < 0) {handle_error(CODE, MSG)}
 
+#define IP_LEN 32
+#define FN_LEN 1024
+#define NODENAME_LEN 128
+#define VERSION_LEN 32
+#define STATUSDESC_LEN 128
+#define CONTENT_LEN 1024
+#define KEY_LEN 256
+#define URL_LEN 256
+#define DEFAULT_SERVERTIMEZONE 8
+#define DEFAULT_NODE_3DES_KEY  "t^^BvGfAdUTixobQP$HhsOsD"
+#define DEFAULT_NODE_3DES_IV   "=V#s%CS)"
+
+#define NODE_3DES_KEY          node_3des_key
+#define NODE_3DES_IV           node_3des_iv
+
+extern char * server;
+extern char * url[1];
+extern ip_t ip[2][2];
+extern port_t port[2][2];
+extern char *SelfBaseName;
+extern char *SelfDirName;
+extern int servertimezone;
+extern char * logdir;
+extern char node_3des_key[KEY_LEN];
+extern char node_3des_iv[KEY_LEN];
+extern int svrversion;
+extern int svrtype;
+
+extern long GetLocaltimeSeconds(int servertimezone);
+extern int StripNewLine(char *buf, int length);
+extern int mkdirs(const char *pathname, mode_t mode);
 #endif

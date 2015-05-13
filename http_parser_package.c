@@ -268,9 +268,6 @@ parser_package_init()
     perror("sem_init()");
     exit(1);
   }
-
-  http_parser_init(&request_parser, HTTP_REQUEST);
-  http_parser_init(&response_parser, HTTP_RESPONSE);
 }
 
 void
@@ -288,9 +285,11 @@ parse_messages (enum http_parser_type type, int message_count, struct message *i
   {
     case HTTP_REQUEST:
       parser = &request_parser;
+      http_parser_init(parser, HTTP_REQUEST);
       break;
     case HTTP_RESPONSE:
       parser = &response_parser;
+      http_parser_init(parser, HTTP_RESPONSE);
       break;
     default:
       exit(1);
@@ -309,6 +308,7 @@ parse_messages (enum http_parser_type type, int message_count, struct message *i
   }
 
   // Parse the stream
+
   size_t traversed = 0;
 
   traversed = http_parser_execute(parser, &settings, total, length);

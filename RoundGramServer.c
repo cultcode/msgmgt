@@ -17,15 +17,15 @@ void *RoundGramServer(void *data)
 {
   int sockfd_me4cli=-1, sockfd_me4ser=-1;
   struct sockaddr_in addr_me4cli={0},addr_cli={0},addr_ser={0};
-  char buf[HTTP_LEN];
+  char buf[HTTP_LEN]={0};
   int length=0;
   int ret=0;
   struct timeval timeout={10,0};
   socklen_t addrlen;
-  ip_t ip_local  = ip[IP_INDEX(UDP,LOCAL)];
-  ip_t ip_remote = ip[IP_INDEX(UDP,REMOTE)];
-  port_t port_local = port[IP_INDEX(UDP,LOCAL)];
-  port_t port_remote = port[IP_INDEX(UDP,REMOTE)];
+  ip_t ip_local  = ip[LOCAL][UDP];
+  ip_t ip_remote = ip[REMOTE][UDP];
+  port_t port_local =  port[UDP][LOCAL];
+  port_t port_remote = port[UDP][REMOTE];
 
   addrlen = sizeof(struct sockaddr_in);
 
@@ -63,44 +63,45 @@ void *RoundGramServer(void *data)
  ********************************************************/
   while(1) {
     //cli -> me -> ser
+    memset(buf,0,sizeof(buf));
     length = recvfrom(sockfd_me4cli, buf, sizeof(buf)-1, 0, (struct sockaddr *)&addr_cli, &addrlen);
+    log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=me2cli, sockfd=%d length=%d", sockfd_me4cli, length);
     handle_error_nn(length, "TRANSMIT", "recvfrom()");
 
     if(length == (sizeof(buf)-1)) {
-      fprintf(stderr,"ERROR: http request is too large to store\n");
+      log4c_cdn(mycat, error, "TRANSMIT", "http request is too large to store");
       exit(-1);
     }
     else {
       //deal with http packet
-      printf("%s(): received from %d:\n%s\n",__FUNCTION__, sockfd_me4cli,buf);
-
-      printf("%s(): sent     to   %d:\n%s\n",__FUNCTION__, sockfd_me4ser,buf);
+      log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
       length = sendto(sockfd_me4ser, buf, strlen(buf), 0, (struct sockaddr *)&addr_ser, addrlen);
+      log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=me2ser, sockfd=%d, length=%d", sockfd_me4ser,length);
       handle_error_nn(length, "TRANSMIT", "sendto");
     }
 
-    //ser -> me -> cli
-    length = recvfrom(sockfd_me4ser, buf, sizeof(buf)-1, 0, (struct sockaddr *)&addr_ser, &addrlen);
-    if(length == -1) {
-      if(errno == EAGAIN) {
-        sprintf(buf,"%d",errno);
-      }
-      else {
-        handle_error("TRANSMIT", "recvfrom() sockfd_me4ser");
-      }
-    }
-    else if(length == (sizeof(buf)-1)) {
-      fprintf(stderr,"ERROR: http request is too large to store\n");
-      exit(-1);
-    }
-    else {
-      //deal with http packet
-      printf("%s(): received from %d:\n%s\n",__FUNCTION__, sockfd_me4ser,buf);
-
-      length = sendto(sockfd_me4cli, buf, strlen(buf), 0, (struct sockaddr *)&addr_cli, addrlen);
-      handle_error_nn(length, "TRANSMIT", "sendto");
-    }
+//    //ser -> me -> cli
+//    length = recvfrom(sockfd_me4ser, buf, sizeof(buf)-1, 0, (struct sockaddr *)&addr_ser, &addrlen);
+//    if(length == -1) {
+//      if(errno == EAGAIN) {
+//        sprintf(buf,"%d",errno);
+//      }
+//      else {
+//        handle_error("TRANSMIT", "recvfrom() sockfd_me4ser");
+//      }
+//    }
+//    else if(length == (sizeof(buf)-1)) {
+//      fprintf(stderr,"ERROR: http request is too large to store\n");
+//      exit(-1);
+//    }
+//    else {
+//      //deal with http packet
+//      printf("%s(): received from %d:\n%s\n",__FUNCTION__, sockfd_me4ser,buf);
+//
+//      length = sendto(sockfd_me4cli, buf, strlen(buf), 0, (struct sockaddr *)&addr_cli, addrlen);
+//      handle_error_nn(length, "TRANSMIT", "sendto");
+//    }
   }
 
 }
