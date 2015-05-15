@@ -63,27 +63,18 @@ void *ConcurrentStreamServer(void *pipefd)
   reqfd = ((int*)pipefd)[PIPE_INDEX(REQUEST,WRITE)];
   resfd = ((int*)pipefd)[PIPE_INDEX(RESPONSE,READ)];
 
-//  ret = pipe(pipefd_so);
-//  handle_error_nn(ret, "pipe()");
-//
-//  nPipeReadFlag = fcntl(pipefd_so[0], F_GETFL, 0);
-//  nPipeReadFlag |= O_NONBLOCK;
-//
-//  ret = fcntl(pipefd_so[0], F_SETFL, nPipeReadFlag);
-//  handle_error_nn(ret, "fcntl()");
-
   addr_mine.sin_family = AF_INET;
   inet_pton(AF_INET,ip_local,&addr_mine.sin_addr);
   addr_mine.sin_port = htons(port_local);
 
   sockfd_listen = socket(AF_INET, SOCK_STREAM, 0);
-  handle_error_nn(sockfd_listen, "TRANSMIT", "socket()");
+  handle_error_nn(sockfd_listen, 1, "TRANSMIT", "socket()");
 
   ret = bind(sockfd_listen, (struct sockaddr *)&addr_mine, sizeof(struct sockaddr));
-  handle_error_nn(ret, "TRANSMIT", "bind()");
+  handle_error_nn(ret, 1, "TRANSMIT", "bind()");
 
   ret = listen(sockfd_listen, 10);
-  handle_error_nn(ret, "TRANSMIT", "listen()");
+  handle_error_nn(ret, 1, "TRANSMIT", "listen()");
 
   FD_ZERO(&readfds);
 
@@ -99,7 +90,7 @@ void *ConcurrentStreamServer(void *pipefd)
     readfds_temp = readfds;
 
     ret = select(FD_SETSIZE, &readfds_temp, NULL, NULL, NULL);
-    handle_error_nn(ret, "TRANSMIT", "ConcurrentStreamServer() select()");
+    handle_error_nn(ret, 1, "TRANSMIT", "ConcurrentStreamServer() select()");
 
     if(ret == 0) {
       log4c_cdn(mycat, error, "TRANSMIT", "select() timeout");
@@ -109,7 +100,7 @@ void *ConcurrentStreamServer(void *pipefd)
     //monitor sockfd_listen
     if(FD_ISSET(sockfd_listen, &readfds_temp)) {
       sockfd_connect = accept(sockfd_listen, (struct sockaddr *)NULL, NULL);
-      handle_error_nn(sockfd_connect, "TRANSMIT", "accept()");
+      handle_error_nn(sockfd_connect, 1, "TRANSMIT", "accept()");
 
       FD_SET_P(sockfd_connect, &readfds);
     }
@@ -119,7 +110,7 @@ void *ConcurrentStreamServer(void *pipefd)
       memset(buf,0,sizeof(buf));
       length = read(resfd, buf, sizeof(buf)-1);
       log4c_cdn(mycat, debug, "TRANSMIT", "receiving packet, source=resfd, sockfd=%d length=%d", resfd, length);
-      handle_error_nn(length, "TRANSMIT", "read()");
+      handle_error_nn(length, 1, "TRANSMIT", "read()");
 
       if(length == 0) {
         close(resfd);
@@ -174,7 +165,7 @@ void *ConcurrentStreamServer(void *pipefd)
         else {
           length = write(sockfd_connect,buf,strlen(buf));
           log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
-          handle_error_nn(length, "TRANSMIT", "write()");
+          handle_error_nn(length, 1, "TRANSMIT", "write()");
         }
       }
     }
@@ -186,7 +177,7 @@ void *ConcurrentStreamServer(void *pipefd)
         memset(buf,0,sizeof(buf));
         length = read(sockfd_connect, buf, sizeof(buf)-1);
         log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d length=%d", sockfd_connect, length);
-        handle_error_nn(length, "TRANSMIT", "read()");
+        handle_error_nn(length, 1,  "TRANSMIT", "read()");
 
         if(length == 0) {
           close(sockfd_connect);
@@ -242,11 +233,11 @@ void *ConcurrentStreamServer(void *pipefd)
 
             length = write(reqfd, buf, sizeof(buf)-1);
             log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
-            handle_error_nn(length, "TRANSMIT", "write()");
+            handle_error_nn(length, 1, "TRANSMIT", "write()");
           }
 
 //          length = write(pipefd_so[1],&sockfd_connect,sizeof(sockfd_connect));
-//          handle_error_nn(length, "TRANSMIT", "write()");
+//          handle_error_nn(length, 1, "TRANSMIT", "write()");
 
           free(url);
         }
@@ -263,7 +254,7 @@ void *ConcurrentStreamServer(void *pipefd)
 
       length = write(reqfd, item->value, sizeof(buf)-1);
       log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
-      handle_error_nn(length, "TRANSMIT", "write()");
+      handle_error_nn(length, 1, "TRANSMIT", "write()");
     }
   }
 

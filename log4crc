@@ -7,18 +7,20 @@
 		<bufsize>0</bufsize>
 		<debug level="2"/>
 		<nocleanup>0</nocleanup>
-		<reread>0</reread>
+		<reread>1</reread>
 	</config>
 
 	<category name="root" priority="notice"/>
 
-  <category name="application1" priority="UNKNOWN" appender="stdout" />
+	<category name="NodeMsgManageSvr" priority="INFO" appender="myrollingfileappender" />
 
-	<appender name="myrollingfileappender" type="rollingfile" logdir="." prefix="myprefix" layout="userloc" rollingpolicy="myrollingpolicy" />
+	<appender name="myrollingfileappender" type="rollingfile" logdir="/var/log/cdn/Titan/NodeMsgManageSvr" prefix="NodeMsgManageSvr_" layout="userloc" rollingpolicy="myrollingpolicy" />
 
 	<appender name="stdout" type="stream" layout="userloc"/>
 
 	<!--rollingpolicy name="myrollingpolicy" type="sizewin" maxsize="1024" maxnum="10" /-->
-	<rollingpolicy name="myrollingpolicy" type="timewin" timetype="0" maxnum="0" />
+
+  <!--timetype: 0->HOUR, 1->DAY 2->MONTH 3->YEAR; maxnum ignored-->
+	<rollingpolicy name="myrollingpolicy" type="timewin" timetype="1" maxnum="0" />
 	
 </log4c>

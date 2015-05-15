@@ -50,14 +50,14 @@ enum {
   FD_CLR((a),(b));\
   log4c_cdn(mycat, debug, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
 
-#define handle_error(CODE, MSG) \
-  do { log4c_cdn(mycat, error, CODE, MSG); exit(EXIT_FAILURE); } while (0);
+#define handle_error(EXIT, CODE, MSG) \
+  do { log4c_cdn(mycat, error, CODE, MSG); if(EXIT) exit(EXIT_FAILURE); } while (0);
 
-#define handle_error_pn(ret, CODE, MSG) \
-  if(ret > 0) {handle_error(CODE, MSG)}
+#define handle_error_pn(RET, EXIT,  CODE, MSG) \
+  if(RET > 0) {handle_error(EXIT, CODE, MSG)}
 
-#define handle_error_nn(ret, CODE, MSG) \
-  if(ret < 0) {handle_error(CODE, MSG)}
+#define handle_error_nn(RET, EXIT, CODE, MSG) \
+  if(RET < 0) {handle_error(EXIT, CODE, MSG)}
 
 #define IP_LEN 32
 #define FN_LEN 1024

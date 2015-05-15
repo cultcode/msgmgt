@@ -22,18 +22,18 @@ int EstablishConnect(ip_t ip, port_t port, int type)
   addr_ser.sin_port = htons(port);
 
   sockfd = socket(AF_INET, type, 0);
-  handle_error_nn(sockfd, "TRANSMIT","socket()");
+  handle_error_nn(sockfd, 1, "TRANSMIT","socket()");
 
-  //ret = setsockopt(sockfd,SOL_SOCKET,SO_SNDTIMEO,(char*)&timeout,sizeof(struct timeval));
-  //handle_error_nn(ret, "TRANSMIT","setsockopt()");
+  ret = setsockopt(sockfd,SOL_SOCKET,SO_SNDTIMEO,(char*)&timeout,sizeof(struct timeval));
+  handle_error_nn(ret, 1,  "TRANSMIT","setsockopt()");
 
-  //ret = setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
-  //handle_error_nn(ret, "TRANSMIT","setsockopt()");
+  ret = setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
+  handle_error_nn(ret, 1, "TRANSMIT","setsockopt()");
 
   log4c_cdn(mycat, info, "TRANSMIT", "Connect to server[%s:%hd]", ip,port);
 
   ret = connect(sockfd, (struct sockaddr*)&addr_ser, sizeof(addr_ser));
-  handle_error_nn(ret, "TRANSMIT","setsockopt()");
+  handle_error_nn(ret, 1, "TRANSMIT","setsockopt()");
 
   return sockfd;
 }
@@ -70,7 +70,7 @@ void *StreamClient(void *pipefd)
     readfds_temp = readfds;
 
     ret = select(FD_SETSIZE, &readfds_temp, NULL, NULL, NULL);
-    handle_error_nn(ret, "TRANSMIT","StreamClient() select()");
+    handle_error_nn(ret, 1, "TRANSMIT","StreamClient() select()");
 
     if(ret == 0) {
       log4c_cdn(mycat, error, "TRANSMIT", "select() timeout");
@@ -82,9 +82,9 @@ void *StreamClient(void *pipefd)
       memset(buf,0,sizeof(buf));
       length = read(sockfd_connect, buf, sizeof(buf)-1);
       log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d, length=%d", sockfd_connect, length);
-      handle_error_nn(length, "TRANSMIT","read()");
+      handle_error_nn(length, 0, "TRANSMIT","read()");
 
-      if(length == 0) {
+      if(length <= 0) {
         close(sockfd_connect);
         FD_CLR_P(sockfd_connect, &readfds);
 
@@ -101,7 +101,7 @@ void *StreamClient(void *pipefd)
 
         length = write(resfd, buf, sizeof(buf)-1);
         log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=resfd, sockfd=%d, length=%d", resfd,length);
-        handle_error_nn(length, "TRANSMIT","write()");
+        handle_error_nn(length, 1, "TRANSMIT","write()");
       }
 
       if(!FD_ISSET(reqfd, &readfds)) {
@@ -113,7 +113,7 @@ void *StreamClient(void *pipefd)
       memset(buf,0,sizeof(buf));
       length = read(reqfd, buf, sizeof(buf)-1);
       log4c_cdn(mycat, debug, "TRANSMIT", "receiving packet, source=reqfd, sockfd=%d length=%d", reqfd, length);
-      handle_error_nn(length, "TRANSMIT","read()");
+      handle_error_nn(length, 1, "TRANSMIT","read()");
 
       if(length == 0) {
         close(reqfd);
@@ -125,7 +125,7 @@ void *StreamClient(void *pipefd)
 
         length = write(sockfd_connect, buf, strlen(buf));
         log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
-        handle_error_nn(length,"TRANSMIT","write()");
+        handle_error_nn(length, 1, "TRANSMIT","write()");
       }
 
     }

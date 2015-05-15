@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <getopt.h>
-#include <signal.h>
+#include <sys/stat.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <netdb.h>
@@ -259,7 +259,7 @@ int ParseOptions(int argc,char**argv)
   }
 
   if(logdir) {
-    mkdirs(logdir, 0x644);
+    mkdirs(logdir, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   }
 
   printf("server: %s\ninit url: %s\nTCP LOCAL %s:%hd UDP LOCAL %s:%hd TCP REMOTE %s:%hd UDP REMOTE %s:%hd \ntime zone %d logdir %s\n",server, url[0], ip[LOCAL][TCP],port[TCP][LOCAL],ip[LOCAL][UDP],port[UDP][LOCAL],ip[REMOTE][TCP],port[TCP][REMOTE],ip[REMOTE][UDP],port[UDP][REMOTE],servertimezone,logdir);

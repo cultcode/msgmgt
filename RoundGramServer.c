@@ -41,22 +41,22 @@ void *RoundGramServer(void *data)
  * sockfd_me4cli
  ********************************************************/
   sockfd_me4cli = socket(AF_INET, SOCK_DGRAM, 0);
-  handle_error_nn(sockfd_me4cli, "TRANSMIT", "socket()");
+  handle_error_nn(sockfd_me4cli, 1, "TRANSMIT", "socket()");
 
   ret = bind(sockfd_me4cli, (struct sockaddr *)&addr_me4cli, addrlen);
-  handle_error_nn(ret, "TRANSMIT", "bind()");
+  handle_error_nn(ret, 1, "TRANSMIT", "bind()");
 
 /*********************************************************
  * sockfd_me4ser
  ********************************************************/
   sockfd_me4ser = socket(AF_INET, SOCK_DGRAM, 0);
-  handle_error_nn(sockfd_me4ser, "TRANSMIT", "socket()");
+  handle_error_nn(sockfd_me4ser, 1, "TRANSMIT", "socket()");
 
   ret = setsockopt(sockfd_me4ser,SOL_SOCKET,SO_SNDTIMEO,(char*)&timeout,sizeof(struct timeval));
-  handle_error_nn(ret, "TRANSMIT", "setsockopt()");
+  handle_error_nn(ret, 1, "TRANSMIT", "setsockopt()");
 
   ret = setsockopt(sockfd_me4ser,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval));
-  handle_error_nn(ret, "TRANSMIT", "setsockopt()");
+  handle_error_nn(ret, 1, "TRANSMIT", "setsockopt()");
 
 /*********************************************************
  * while
@@ -66,7 +66,7 @@ void *RoundGramServer(void *data)
     memset(buf,0,sizeof(buf));
     length = recvfrom(sockfd_me4cli, buf, sizeof(buf)-1, 0, (struct sockaddr *)&addr_cli, &addrlen);
     log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=me2cli, sockfd=%d length=%d", sockfd_me4cli, length);
-    handle_error_nn(length, "TRANSMIT", "recvfrom()");
+    handle_error_nn(length, 1, "TRANSMIT", "recvfrom()");
 
     if(length == (sizeof(buf)-1)) {
       log4c_cdn(mycat, error, "TRANSMIT", "http request is too large to store");
@@ -78,7 +78,7 @@ void *RoundGramServer(void *data)
 
       length = sendto(sockfd_me4ser, buf, strlen(buf), 0, (struct sockaddr *)&addr_ser, addrlen);
       log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=me2ser, sockfd=%d, length=%d", sockfd_me4ser,length);
-      handle_error_nn(length, "TRANSMIT", "sendto");
+      handle_error_nn(length, 1, "TRANSMIT", "sendto");
     }
 
 //    //ser -> me -> cli
@@ -88,7 +88,7 @@ void *RoundGramServer(void *data)
 //        sprintf(buf,"%d",errno);
 //      }
 //      else {
-//        handle_error("TRANSMIT", "recvfrom() sockfd_me4ser");
+//        handle_error("TRANSMIT", 1, "recvfrom() sockfd_me4ser");
 //      }
 //    }
 //    else if(length == (sizeof(buf)-1)) {
@@ -100,7 +100,7 @@ void *RoundGramServer(void *data)
 //      printf("%s(): received from %d:\n%s\n",__FUNCTION__, sockfd_me4ser,buf);
 //
 //      length = sendto(sockfd_me4cli, buf, strlen(buf), 0, (struct sockaddr *)&addr_cli, addrlen);
-//      handle_error_nn(length, "TRANSMIT", "sendto");
+//      handle_error_nn(length, 1, "TRANSMIT", "sendto");
 //    }
   }
 

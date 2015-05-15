@@ -108,6 +108,7 @@ GET_ARGUMENTS_XML:
   }
 
 GET_ARGUMENTS_END:
+  fflush(stdout);
 
 /*********************************************************
  * import log4c functions
@@ -136,7 +137,6 @@ GET_ARGUMENTS_END:
   mycat = (*log4c_category_get)(SelfBaseName);
   
   log4c_cdn(mycat, info, "LOG4C", "log4c loaded");	      
-
 
 /*********************************************************
  * POST to SvrInit
@@ -169,17 +169,17 @@ GET_ARGUMENTS_END:
  * create threads
  ********************************************************/
   if((ret = pthread_create(&id_ConcurrentStreamServer, NULL, &ConcurrentStreamServer, pipefd)) != 0) {
-    handle_error_pn(ret, "THREAD", "pthread_create failed");
+    handle_error_pn(ret, 1, "THREAD", "pthread_create failed");
     exit(ret);
   }
 
   if((ret = pthread_create(&id_StreamClient, NULL, &StreamClient, pipefd)) != 0) {
-    handle_error_pn(ret, "THREAD", "pthread_create failed");
+    handle_error_pn(ret, 1, "THREAD", "pthread_create failed");
     exit(ret);
   }
 
   if((ret = pthread_create(&id_RoundGramServer, NULL, &RoundGramServer, 0)) != 0) {
-    handle_error_pn(ret, "THREAD", "pthread_create failed");
+    handle_error_pn(ret, 1,  "THREAD", "pthread_create failed");
     exit(ret);
   }
 
