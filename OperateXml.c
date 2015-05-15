@@ -262,7 +262,7 @@ int ParseOptions(int argc,char**argv)
     mkdirs(logdir, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   }
 
-  printf("server: %s\ninit url: %s\nTCP LOCAL %s:%hd UDP LOCAL %s:%hd TCP REMOTE %s:%hd UDP REMOTE %s:%hd \ntime zone %d logdir %s\n",server, url[0], ip[LOCAL][TCP],port[TCP][LOCAL],ip[LOCAL][UDP],port[UDP][LOCAL],ip[REMOTE][TCP],port[TCP][REMOTE],ip[REMOTE][UDP],port[UDP][REMOTE],servertimezone,logdir);
+  printf("server: %s\ninit url: %s\nLOCAL TCP %s:%hd LOCAL UDP %s:%hd REMOTE TCP %s:%hd REMOTE UDP %s:%hd \ntime zone %d logdir %s\n",server, url[0], ip[LOCAL][TCP],port[TCP][LOCAL],ip[LOCAL][UDP],port[UDP][LOCAL],ip[REMOTE][TCP],port[TCP][REMOTE],ip[REMOTE][UDP],port[UDP][REMOTE],servertimezone,logdir);
 
 return flags;
 
