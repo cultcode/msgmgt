@@ -51,6 +51,6 @@ struct message {
 };
 
 extern void parser_package_init();
-extern void parse_messages (enum http_parser_type type, int message_count, struct message *input_messages);
+extern int  parse_messages (enum http_parser_type type, int message_count, struct message *input_messages);
 
 #endif

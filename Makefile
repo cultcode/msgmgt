@@ -1,4 +1,4 @@
-VERSION=\"1.0.$(shell date +%Y%m%d).$(shell date +%H%M%S)\"
+VERSION=\"1.0.$(shell date +%Y%m%d).$(shell date +%H%M)\"
 
 CFLAGS=-Wall -g
 

@@ -176,10 +176,10 @@ int ParseOptions(int argc,char**argv)
   while ( -1 != (i = getopt_long(argc, argv, short_options, long_options, NULL))) {
     switch (i) {
     case 'S':
-      server = optarg;
+      server = strdup(optarg);
       break;
     case 'i':
-      url[0] = optarg;
+      url[0] = strdup(optarg);
       break;
     case 'P':
       port[UDP][REMOTE] = atoi(optarg);
@@ -205,7 +205,7 @@ int ParseOptions(int argc,char**argv)
       svrtype  = atoi(optarg);
       break;
     case 'l':
-      logdir  = optarg;
+      logdir  = strdup(optarg);
       break;
     case 'j':
       strcpy(node_3des_iv, optarg);

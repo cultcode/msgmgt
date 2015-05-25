@@ -33,7 +33,7 @@ int EstablishConnect(ip_t ip, port_t port, int type)
   log4c_cdn(mycat, info, "TRANSMIT", "Connect to server[%s:%hd]", ip,port);
 
   ret = connect(sockfd, (struct sockaddr*)&addr_ser, sizeof(addr_ser));
-  handle_error_nn(ret, 1, "TRANSMIT","setsockopt()");
+  handle_error_nn(ret, 1, "TRANSMIT","connect()");
 
   return sockfd;
 }

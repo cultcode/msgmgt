@@ -121,37 +121,40 @@ void *ConcurrentStreamServer(void *pipefd)
         log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
         message_response.raw = buf;
-        parse_messages(HTTP_RESPONSE, 1, &message_response);
+        if(parse_messages(HTTP_RESPONSE, 1, &message_response)) {
+          log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown and discarded, content is\n%s",buf);
+        }
+        else {
+          for(i=0; i<message_response.num_headers; i++) {
+            if(!strcasecmp(message_response.headers[i][0], "Set-Cookie" )) {
 
-        for(i=0; i<message_response.num_headers; i++) {
-          if(!strcasecmp(message_response.headers[i][0], "Set-Cookie" )) {
+              cookie = calloc(1, strlen(message_response.headers[i][1])+1);
+              strcpy(cookie,message_response.headers[i][1]);
+              key = strstr(cookie,"Interface=");
+              key += strlen("Interface=");
 
-            cookie = calloc(1, strlen(message_response.headers[i][1])+1);
-            strcpy(cookie,message_response.headers[i][1]);
-            key = strstr(cookie,"Interface=");
-            key += strlen("Interface=");
+              HASH_FIND_STR( users, key, s);
 
-            HASH_FIND_STR( users, key, s);
+              if(s == NULL) {
+                log4c_cdn(mycat, error, "HASH", "%s=>NULL found from hash", key);
+                exit(1);
+              }
+              else {
+                sockfd_connect = s->id;
+                log4c_cdn(mycat, debug, "HASH", "%s=>%d found from hash",key, s->id);
+              }
 
-            if(s == NULL) {
-              log4c_cdn(mycat, error, "HASH", "%s=>NULL found from hash", key);
-              exit(1);
+
+              if(!strcasecmp(key,"svrinit")) {
+                item = TAILQ_FIRST(&tailq_svrinit_head);
+                log4c_cdn(mycat, debug, "QUEUE", "entry removed from TAILQ svrinit");
+                TAILQ_REMOVE(&tailq_svrinit_head, item, tailq_entry);
+              }
+
+              free(cookie);
+
+              break;
             }
-            else {
-              sockfd_connect = s->id;
-              log4c_cdn(mycat, debug, "HASH", "%s=>%d found from hash",key, s->id);
-            }
-
-
-            if(!strcasecmp(key,"svrinit")) {
-              item = TAILQ_FIRST(&tailq_svrinit_head);
-              log4c_cdn(mycat, debug, "QUEUE", "entry removed from TAILQ svrinit");
-              TAILQ_REMOVE(&tailq_svrinit_head, item, tailq_entry);
-            }
-
-            free(cookie);
-
-            break;
           }
         }
 
@@ -201,45 +204,48 @@ void *ConcurrentStreamServer(void *pipefd)
 
         /* get source ID */
           message_request.raw = buf;
-          parse_messages(HTTP_REQUEST, 1, &message_request);
-
-          url = calloc(1, strlen(message_request.request_url)+1);
-          strcpy(url, message_request.request_url);
-          key = basename(url);
+          if(parse_messages(HTTP_REQUEST, 1, &message_request)) {
+            log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown and discarded, content is\n%s",buf);
+          }
+          else {
+            url = calloc(1, strlen(message_request.request_url)+1);
+            strcpy(url, message_request.request_url);
+            key = basename(url);
 
 //          printf("===============HASH=================\n");
 //          HASH_ITER(hh, users, s, tmp) {
 //            printf("%s:%d\n", s->name, s->id);
 //          }
 
-          //construct hash entry
-          s = (struct my_struct*)calloc(1, sizeof(struct my_struct));
-          s->id = sockfd_connect;
-          strcpy(s->name, key);
+            //construct hash entry
+            s = (struct my_struct*)calloc(1, sizeof(struct my_struct));
+            s->id = sockfd_connect;
+            strcpy(s->name, key);
 
-          //put HTTP package & hash entry into queue
-          if(!strcasecmp(key, "svrinit")) {
-            item = calloc(1, sizeof(struct tailq_entry_svrinit));
-            strcpy(item->value, buf);
-            item->record = s;
-            TAILQ_INSERT_TAIL(&tailq_svrinit_head, item, tailq_entry);
-            log4c_cdn(mycat, debug, "QUEUE", "entry added into TAILQ svrinit");
-          }
-          else {
-            //HASH_REPLACE_STR(head,keyfield_name, item_ptr, replaced_item_ptr)
-            HASH_REPLACE_STR( users, name, s, tmp );
-            free(tmp);
-            log4c_cdn(mycat, debug, "HASH", "%s added into HASH", s->name);
+            //put HTTP package & hash entry into queue
+            if(!strcasecmp(key, "svrinit")) {
+              item = calloc(1, sizeof(struct tailq_entry_svrinit));
+              strcpy(item->value, buf);
+              item->record = s;
+              TAILQ_INSERT_TAIL(&tailq_svrinit_head, item, tailq_entry);
+              log4c_cdn(mycat, debug, "QUEUE", "entry added into TAILQ svrinit");
+            }
+            else {
+              //HASH_REPLACE_STR(head,keyfield_name, item_ptr, replaced_item_ptr)
+              HASH_REPLACE_STR( users, name, s, tmp );
+              free(tmp);
+              log4c_cdn(mycat, debug, "HASH", "%s added into HASH", s->name);
 
-            length = write(reqfd, buf, sizeof(buf)-1);
-            log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
-            handle_error_nn(length, 1, "TRANSMIT", "write()");
-          }
+              length = write(reqfd, buf, sizeof(buf)-1);
+              log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+              handle_error_nn(length, 1, "TRANSMIT", "write()");
+            }
 
 //          length = write(pipefd_so[1],&sockfd_connect,sizeof(sockfd_connect));
 //          handle_error_nn(length, 1, "TRANSMIT", "write()");
 
-          free(url);
+            free(url);
+          }
         }
       }
     }

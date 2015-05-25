@@ -270,7 +270,7 @@ parser_package_init()
   }
 }
 
-void
+int
 parse_messages (enum http_parser_type type, int message_count, struct message *input_messages)
 {
   http_parser *parser;
@@ -313,10 +313,14 @@ parse_messages (enum http_parser_type type, int message_count, struct message *i
 
   traversed = http_parser_execute(parser, &settings, total, length);
 
-  assert(HTTP_PARSER_ERRNO(parser) == HPE_OK);
-  assert(num_messages == message_count);
+//  assert(HTTP_PARSER_ERRNO(parser) == HPE_OK);
+//  assert(num_messages == message_count);
 
   free(total);
 
   sem_post(&sem);
+
+  if(HTTP_PARSER_ERRNO(parser) != HPE_OK) return 1;
+  if(num_messages != message_count) return 2;
+  return 0;
 }

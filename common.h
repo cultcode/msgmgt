@@ -43,12 +43,12 @@ enum {
 
 #define FD_SET_P(a,b) \
   FD_SET((a),(b));\
-  log4c_cdn(mycat, debug, "TRANSMIT", "FD_SET %d(%s)", (a), ""#a"");
+  log4c_cdn(mycat, info, "TRANSMIT", "FD_SET %d(%s)", (a), ""#a"");
   
 
 #define FD_CLR_P(a,b) \
   FD_CLR((a),(b));\
-  log4c_cdn(mycat, debug, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
+  log4c_cdn(mycat, info, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
 
 #define handle_error(EXIT, CODE, MSG) \
   do { log4c_cdn(mycat, error, CODE, MSG); if(EXIT) exit(EXIT_FAILURE); } while (0);
