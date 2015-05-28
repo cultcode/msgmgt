@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <sys/errno.h>
 
 #include "common.h"
 
@@ -64,4 +66,80 @@ int mkdirs(const char *pathname, mode_t mode) {
   ret = mkdir(pathname,mode);
 
   return ret;
+}
+
+int sd_close(int sockfd)
+{
+  int ret=0;
+CLOSE_SOCKFD:
+  ret = close(sockfd);
+  if((ret == -1) && (errno == EINTR)) goto CLOSE_SOCKFD;
+
+  return ret;
+}
+
+int sd_read(int sockfd, char* buf, int len)
+{
+  int ret=0;
+READ_SOCKFD:
+  ret = read(sockfd, buf, len);
+  if((ret == -1) && (errno == EINTR)) goto READ_SOCKFD;
+  return ret;
+}
+
+int sd_write(int sockfd, char* buf, int len)
+{
+  int ret=0;
+WRITE_SOCKFD:
+  ret = write(sockfd, buf, len);
+  if((ret == -1) && (errno == EINTR)) goto WRITE_SOCKFD;
+  return ret;
+}
+
+int sd_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+  int ret=0;
+ACCEPT_SOCKFD:
+  ret = accept(sockfd, addr, addrlen);
+  if((ret == -1) && (errno == EINTR)) goto ACCEPT_SOCKFD;
+  return ret;
+}
+
+void strrpl(char* pDstOut, char* pSrcIn, const char* pSrcRpl, const char* pDstRpl)
+{ 
+char* pi = pSrcIn; 
+char* po = pDstOut; 
+
+int nSrcRplLen = strlen(pSrcRpl); 
+int nDstRplLen = strlen(pDstRpl); 
+
+char *p = NULL; 
+int nLen = 0; 
+
+do 
+{
+// 找到下一个替换点
+p = strstr(pi, pSrcRpl); 
+
+if(p != NULL) 
+{ 
+// 拷贝上一个替换点和下一个替换点中间的字符串
+nLen = p - pi; 
+memcpy(po, pi, nLen);
+
+// 拷贝需要替换的字符串
+memcpy(po + nLen, pDstRpl, nDstRplLen); 
+} 
+else 
+{ 
+strcpy(po, pi); 
+
+// 如果没有需要拷贝的字符串,说明循环应该结束
+break;
+} 
+
+pi = p + nSrcRplLen; 
+po = po + nLen + nDstRplLen; 
+
+} while (p != NULL); 
 }

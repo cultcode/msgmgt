@@ -50,16 +50,17 @@ enum {
   FD_CLR((a),(b));\
   log4c_cdn(mycat, info, "TRANSMIT", "FD_CLR %d(%s)", (a), ""#a"");
 
-#define handle_error(EXIT, CODE, MSG) \
-  do { log4c_cdn(mycat, error, CODE, MSG); if(EXIT) exit(EXIT_FAILURE); } while (0);
+#define handle_error(EXIT, CODE, args...) \
+  do { log4c_cdn(mycat, error, CODE, args); if(EXIT) exit(EXIT_FAILURE); } while (0);
 
-#define handle_error_pn(RET, EXIT,  CODE, MSG) \
-  if(RET > 0) {handle_error(EXIT, CODE, MSG)}
+#define handle_error_pn(RET, EXIT,  CODE, args...) \
+  if(RET > 0) {handle_error(EXIT, CODE, args)}
 
-#define handle_error_nn(RET, EXIT, CODE, MSG) \
-  if(RET < 0) {handle_error(EXIT, CODE, MSG)}
+#define handle_error_nn(RET, EXIT, CODE, args...) \
+  if(RET < 0) {handle_error(EXIT, CODE, args)}
 
 #define IP_LEN 32
+#define PORT_LEN 16
 #define FN_LEN 1024
 #define NODENAME_LEN 128
 #define VERSION_LEN 32
@@ -73,6 +74,8 @@ enum {
 
 #define NODE_3DES_KEY          node_3des_key
 #define NODE_3DES_IV           node_3des_iv
+
+#define ACK_100CONTINUE "HTTP/1.1 100 Continue\r\n\r\n"
 
 extern char * server;
 extern char * url[1];
@@ -90,4 +93,6 @@ extern int svrtype;
 extern long GetLocaltimeSeconds(int servertimezone);
 extern int StripNewLine(char *buf, int length);
 extern int mkdirs(const char *pathname, mode_t mode);
+extern int sd_close(int sockfd);
+extern void strrpl(char* pDstOut, char* pSrcIn, const char* pSrcRpl, const char* pDstRpl);
 #endif

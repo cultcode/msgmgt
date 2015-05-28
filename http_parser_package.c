@@ -320,7 +320,7 @@ parse_messages (enum http_parser_type type, int message_count, struct message *i
 
   sem_post(&sem);
 
-  if(HTTP_PARSER_ERRNO(parser) != HPE_OK) return 1;
-  if(num_messages != message_count) return 2;
+  if(HTTP_PARSER_ERRNO(parser) != HPE_OK) return 2;
+  if(num_messages != message_count) return 1;
   return 0;
 }

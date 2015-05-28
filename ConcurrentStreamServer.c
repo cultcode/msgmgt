@@ -23,6 +23,7 @@
 struct my_struct {
     char name[HASH_KEY_LEN];             /* key (string is WITHIN the structure) */
     int id;
+    int sent;
     UT_hash_handle hh;         /* makes this structure hashable */
 };
 static struct my_struct *users=NULL;
@@ -33,6 +34,13 @@ struct tailq_entry_svrinit {
     TAILQ_ENTRY(tailq_entry_svrinit) tailq_entry;
 };
 TAILQ_HEAD(, tailq_entry_svrinit) tailq_svrinit_head;
+
+struct tailq_entry_GetNodeSvrSysParmList {
+    char value[HTTP_LEN];
+    struct my_struct *record;
+    TAILQ_ENTRY(tailq_entry_GetNodeSvrSysParmList) tailq_entry;
+};
+TAILQ_HEAD(, tailq_entry_GetNodeSvrSysParmList) tailq_GetNodeSvrSysParmList_head;
 
  //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 static struct message message_response;
@@ -46,19 +54,22 @@ void *ConcurrentStreamServer(void *pipefd)
   char buf[HTTP_LEN]={0};
   int length=0;
   int reqfd=0, resfd=0;
-  ip_t ip_local = ip[TCP][LOCAL];
-  port_t port_local = port[TCP][LOCAL];
+  ip_t ip_local = ip[LOCAL][TCP];
+  port_t port_local = port[LOCAL][TCP];
   struct timeval timeout={10,0}, timeout_temp={0};
-  int ret=0;
+  int ret=0, ret_parse=0;
   //int nPipeReadFlag = 0;
   //int pipefd_so[2]={-1};
   int i=0;
   struct my_struct *s=NULL, *tmp=NULL;
   char *key=NULL;
   char *url=NULL, *cookie=NULL;
-  struct tailq_entry_svrinit *item;
+  char *token=NULL;
+  struct tailq_entry_svrinit *item_svrinit;
+  struct tailq_entry_GetNodeSvrSysParmList *item_GetNodeSvrSysParmList;
 
   TAILQ_INIT(&tailq_svrinit_head);
+  TAILQ_INIT(&tailq_GetNodeSvrSysParmList_head);
 
   reqfd = ((int*)pipefd)[PIPE_INDEX(REQUEST,WRITE)];
   resfd = ((int*)pipefd)[PIPE_INDEX(RESPONSE,READ)];
@@ -68,13 +79,13 @@ void *ConcurrentStreamServer(void *pipefd)
   addr_mine.sin_port = htons(port_local);
 
   sockfd_listen = socket(AF_INET, SOCK_STREAM, 0);
-  handle_error_nn(sockfd_listen, 1, "TRANSMIT", "socket()");
+  handle_error_nn(sockfd_listen, 1, "TRANSMIT", "socket() %s",strerror(errno));
 
   ret = bind(sockfd_listen, (struct sockaddr *)&addr_mine, sizeof(struct sockaddr));
-  handle_error_nn(ret, 1, "TRANSMIT", "bind()");
+  handle_error_nn(ret, 1, "TRANSMIT", "bind() to %s:%hd %s",ip_local,port_local, strerror(errno));
 
   ret = listen(sockfd_listen, 10);
-  handle_error_nn(ret, 1, "TRANSMIT", "listen()");
+  handle_error_nn(ret, 1, "TRANSMIT", "listen() %s",strerror(errno));
 
   FD_ZERO(&readfds);
 
@@ -83,14 +94,12 @@ void *ConcurrentStreamServer(void *pipefd)
   FD_SET_P(resfd, &readfds);
 
   while(1) {
-    memset(&message_response, 0, sizeof(message_response));
-    memset(&message_request,  0, sizeof(message_request));
 
     timeout_temp = timeout;
     readfds_temp = readfds;
 
     ret = select(FD_SETSIZE, &readfds_temp, NULL, NULL, NULL);
-    handle_error_nn(ret, 1, "TRANSMIT", "ConcurrentStreamServer() select()");
+    handle_error_nn(ret, 1, "TRANSMIT", "select() %s",strerror(errno));
 
     if(ret == 0) {
       log4c_cdn(mycat, error, "TRANSMIT", "select() timeout");
@@ -100,29 +109,31 @@ void *ConcurrentStreamServer(void *pipefd)
     //monitor sockfd_listen
     if(FD_ISSET(sockfd_listen, &readfds_temp)) {
       sockfd_connect = accept(sockfd_listen, (struct sockaddr *)NULL, NULL);
-      handle_error_nn(sockfd_connect, 1, "TRANSMIT", "accept()");
+      handle_error_nn(sockfd_connect, 1, "TRANSMIT", "accept() %s",strerror(errno));
 
       FD_SET_P(sockfd_connect, &readfds);
     }
     //monitor response fd
-    else if(FD_ISSET(resfd, &readfds_temp)) {
+    /*else*/ if(FD_ISSET(resfd, &readfds_temp)) {
 
+      memset(&message_response, 0, sizeof(message_response));
       memset(buf,0,sizeof(buf));
+
       length = read(resfd, buf, sizeof(buf)-1);
-      log4c_cdn(mycat, debug, "TRANSMIT", "receiving packet, source=resfd, sockfd=%d length=%d", resfd, length);
-      handle_error_nn(length, 1, "TRANSMIT", "read()");
+      handle_error_nn(length, 1, "TRANSMIT", "read() %s",strerror(errno));
+      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=resfd, sockfd=%d length=%d", resfd, length);
 
       if(length == 0) {
-        close(resfd);
+        ret = sd_close(resfd);
+        handle_error_nn(ret, 1, "TRANSMIT","close() %s",strerror(errno));
         FD_CLR_P(resfd, &readfds);
       }
       else {
         //deal with http packet
-        log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
         message_response.raw = buf;
-        if(parse_messages(HTTP_RESPONSE, 1, &message_response)) {
-          log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown and discarded, content is\n%s",buf);
+        if((ret_parse=parse_messages(HTTP_RESPONSE, 1, &message_response)) != 0) {
+          log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown and discarded %d, content is\n%s",ret_parse,buf);
         }
         else {
           for(i=0; i<message_response.num_headers; i++) {
@@ -131,7 +142,10 @@ void *ConcurrentStreamServer(void *pipefd)
               cookie = calloc(1, strlen(message_response.headers[i][1])+1);
               strcpy(cookie,message_response.headers[i][1]);
               key = strstr(cookie,"Interface=");
+              if(key == NULL) {i = message_response.num_headers;break;}
               key += strlen("Interface=");
+              token = strchr(key, ' '); if(token) *token = '\0';
+              token = strchr(key, ';'); if(token) *token = '\0';
 
               HASH_FIND_STR( users, key, s);
 
@@ -146,9 +160,15 @@ void *ConcurrentStreamServer(void *pipefd)
 
 
               if(!strcasecmp(key,"svrinit")) {
-                item = TAILQ_FIRST(&tailq_svrinit_head);
+                item_svrinit = TAILQ_FIRST(&tailq_svrinit_head);
                 log4c_cdn(mycat, debug, "QUEUE", "entry removed from TAILQ svrinit");
-                TAILQ_REMOVE(&tailq_svrinit_head, item, tailq_entry);
+                TAILQ_REMOVE(&tailq_svrinit_head, item_svrinit, tailq_entry);
+              }
+
+              if(!strcasecmp(key,"GetNodeSvrSysParmList")) {
+                item_GetNodeSvrSysParmList = TAILQ_FIRST(&tailq_GetNodeSvrSysParmList_head);
+                log4c_cdn(mycat, debug, "QUEUE", "entry removed from TAILQ GetNodeSvrSysParmList");
+                TAILQ_REMOVE(&tailq_GetNodeSvrSysParmList_head, item_GetNodeSvrSysParmList, tailq_entry);
               }
 
               free(cookie);
@@ -156,34 +176,41 @@ void *ConcurrentStreamServer(void *pipefd)
               break;
             }
           }
+          if(i >= message_response.num_headers) {
+            log4c_cdn(mycat, warn, "TRANSMIT", "Set-Cookie|Interface= not found, HTTP packet discarded");
+            log4c_cdn(mycat, warn, "TRANSMIT", "Packet content is\n%s",buf);
+            //exit(1);
+          }
+          /* get destination ID*/
+
+          else {
+            log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
+            log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
+            length = write(sockfd_connect,buf,strlen(buf));
+            handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+          }
         }
 
-        if(i >= message_response.num_headers) {
-          log4c_cdn(mycat, error, "TRANSMIT", "set-cookie not found, HTTP packet discarded");
-          log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",message_response.raw);
-          //exit(1);
-        }
-        /* get destination ID*/
-
-        else {
-          length = write(sockfd_connect,buf,strlen(buf));
-          log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
-          handle_error_nn(length, 1, "TRANSMIT", "write()");
-        }
       }
     }
     //monitor all sockfd_connect
-    else {
+    /*else*/ {
       for(sockfd_connect=0; sockfd_connect< FD_SETSIZE; sockfd_connect++) {
         if(!FD_ISSET(sockfd_connect, &readfds_temp)) continue; 
+        if(sockfd_connect==sockfd_listen) continue;
+        if(sockfd_connect==resfd) continue;
 
+        memset(&message_request,  0, sizeof(message_request));
         memset(buf,0,sizeof(buf));
+
         length = read(sockfd_connect, buf, sizeof(buf)-1);
+        handle_error_nn(length, 1,  "TRANSMIT", "read() from %d:%s",sockfd_connect,strerror(errno));
         log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d length=%d", sockfd_connect, length);
-        handle_error_nn(length, 1,  "TRANSMIT", "read()");
+        log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
         if(length == 0) {
-          close(sockfd_connect);
+          ret = sd_close(sockfd_connect);
+          handle_error_nn(ret, 1, "TRANSMIT","close() %s",strerror(errno));
           FD_CLR_P(sockfd_connect, &readfds);
 
           HASH_ITER(hh, users, s, tmp) {
@@ -200,68 +227,104 @@ void *ConcurrentStreamServer(void *pipefd)
         }
         else {
           //deal with http packet
-        log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
         /* get source ID */
           message_request.raw = buf;
-          if(parse_messages(HTTP_REQUEST, 1, &message_request)) {
-            log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown and discarded, content is\n%s",buf);
-          }
-          else {
-            url = calloc(1, strlen(message_request.request_url)+1);
-            strcpy(url, message_request.request_url);
-            key = basename(url);
+          ret_parse=parse_messages(HTTP_REQUEST, 1, &message_request);
+          switch(ret_parse) {
+            case 1:
+              log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown %d",ret_parse);
+            case 0:
+              url = calloc(1, strlen(message_request.request_url)+1);
+              strcpy(url, message_request.request_url);
+              key = basename(url);
 
-//          printf("===============HASH=================\n");
-//          HASH_ITER(hh, users, s, tmp) {
-//            printf("%s:%d\n", s->name, s->id);
-//          }
+//            printf("===============HASH=================\n");
+//            HASH_ITER(hh, users, s, tmp) {
+//              printf("%s:%d\n", s->name, s->id);
+//            }
 
-            //construct hash entry
-            s = (struct my_struct*)calloc(1, sizeof(struct my_struct));
-            s->id = sockfd_connect;
-            strcpy(s->name, key);
+              //construct hash entry
+              s = (struct my_struct*)calloc(1, sizeof(struct my_struct));
+              s->id = sockfd_connect;
+              strcpy(s->name, key);
 
-            //put HTTP package & hash entry into queue
-            if(!strcasecmp(key, "svrinit")) {
-              item = calloc(1, sizeof(struct tailq_entry_svrinit));
-              strcpy(item->value, buf);
-              item->record = s;
-              TAILQ_INSERT_TAIL(&tailq_svrinit_head, item, tailq_entry);
-              log4c_cdn(mycat, debug, "QUEUE", "entry added into TAILQ svrinit");
-            }
-            else {
-              //HASH_REPLACE_STR(head,keyfield_name, item_ptr, replaced_item_ptr)
-              HASH_REPLACE_STR( users, name, s, tmp );
-              free(tmp);
-              log4c_cdn(mycat, debug, "HASH", "%s added into HASH", s->name);
+              //put HTTP package & hash entry into queue
+              if(!strcasecmp(key, "svrinit")) {
+                item_svrinit = calloc(1, sizeof(struct tailq_entry_svrinit));
+                strcpy(item_svrinit->value, buf);
+                item_svrinit->record = s;
+                TAILQ_INSERT_TAIL(&tailq_svrinit_head, item_svrinit, tailq_entry);
+                log4c_cdn(mycat, debug, "QUEUE", "entry added into TAILQ svrinit");
+              }
+              else if(!strcasecmp(key, "GetNodeSvrSysParmList")) {
+                item_GetNodeSvrSysParmList = calloc(1, sizeof(struct tailq_entry_GetNodeSvrSysParmList));
+                strcpy(item_GetNodeSvrSysParmList->value, buf);
+                item_GetNodeSvrSysParmList->record = s;
+                TAILQ_INSERT_TAIL(&tailq_GetNodeSvrSysParmList_head, item_GetNodeSvrSysParmList, tailq_entry);
+                log4c_cdn(mycat, debug, "QUEUE", "entry added into TAILQ GetNodeSvrSysParmList");
+              }
+              else {
+                HASH_REPLACE_STR( users, name, s, tmp );
+                free(tmp);
+                log4c_cdn(mycat, debug, "HASH", "entry %s=>%d added into HASH", s->name, s->id);
 
-              length = write(reqfd, buf, sizeof(buf)-1);
-              log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
-              handle_error_nn(length, 1, "TRANSMIT", "write()");
-            }
+                length = write(reqfd, buf, strlen(buf));
+                handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+                log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+              }
 
-//          length = write(pipefd_so[1],&sockfd_connect,sizeof(sockfd_connect));
-//          handle_error_nn(length, 1, "TRANSMIT", "write()");
+              free(url);
 
-            free(url);
+//              if(strstr(buf,"Expect: 100-continue")) {
+//                length = write(sockfd_connect,ACK_100CONTINUE, sizeof(ACK_100CONTINUE));
+//                handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+//                log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=sockfd_connect, sockfd=%d, length=%d", sockfd_connect,length);
+//                log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",ACK_100CONTINUE);
+//              }
+
+              break;
+            case 2:
+              log4c_cdn(mycat, warn, "TRANSMIT", "Packet unknown %d",ret_parse);
+              length = write(reqfd, buf, strlen(buf));
+              handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+              log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+              break;
+            default:
+              break;
           }
         }
       }
     }
 
-    item = TAILQ_FIRST(&tailq_svrinit_head);
-    if((item != NULL) && (TAILQ_NEXT(item, tailq_entry) == NULL))  {
-      s = item->record;
+    item_svrinit = TAILQ_FIRST(&tailq_svrinit_head);
+    if((item_svrinit != NULL) && (TAILQ_NEXT(item_svrinit, tailq_entry) == NULL) && !item_svrinit->record->sent)  {
+      s = item_svrinit->record;
 
       HASH_REPLACE_STR( users, name, s, tmp);
       free(tmp);
       log4c_cdn(mycat, debug, "HASH", "entry %s=>%d added into HASH", s->name, s->id);
 
-      length = write(reqfd, item->value, sizeof(buf)-1);
-      log4c_cdn(mycat, debug, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
-      handle_error_nn(length, 1, "TRANSMIT", "write()");
+      length = write(reqfd, item_svrinit->value, strlen(buf));
+      handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+      log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+      s->sent = 1;
     }
+
+    item_GetNodeSvrSysParmList = TAILQ_FIRST(&tailq_GetNodeSvrSysParmList_head);
+    if((item_GetNodeSvrSysParmList != NULL) && (TAILQ_NEXT(item_GetNodeSvrSysParmList, tailq_entry) == NULL) && !item_GetNodeSvrSysParmList->record->sent)  {
+      s = item_GetNodeSvrSysParmList->record;
+
+      HASH_REPLACE_STR( users, name, s, tmp);
+      free(tmp);
+      log4c_cdn(mycat, debug, "HASH", "entry %s=>%d added into HASH", s->name, s->id);
+
+      length = write(reqfd, item_GetNodeSvrSysParmList->value, strlen(buf));
+      handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+      log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=reqfd, sockfd=%d, length=%d", reqfd,length);
+      s->sent = 1;
+    }
+
   }
 
 }

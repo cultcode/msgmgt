@@ -182,10 +182,10 @@ int ParseOptions(int argc,char**argv)
       url[0] = strdup(optarg);
       break;
     case 'P':
-      port[UDP][REMOTE] = atoi(optarg);
+      port[REMOTE][UDP] = atoi(optarg);
       break;
     case 'O':
-      port[TCP][REMOTE] = atoi(optarg);
+      port[REMOTE][TCP] = atoi(optarg);
       break;
     case 'z':
       servertimezone  = atoi(optarg);
@@ -262,7 +262,7 @@ int ParseOptions(int argc,char**argv)
     mkdirs(logdir, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   }
 
-  printf("server: %s\ninit url: %s\nLOCAL TCP %s:%hd LOCAL UDP %s:%hd REMOTE TCP %s:%hd REMOTE UDP %s:%hd \ntime zone %d logdir %s\n",server, url[0], ip[LOCAL][TCP],port[TCP][LOCAL],ip[LOCAL][UDP],port[UDP][LOCAL],ip[REMOTE][TCP],port[TCP][REMOTE],ip[REMOTE][UDP],port[UDP][REMOTE],servertimezone,logdir);
+  printf("server: %s\ninit url: %s\nLOCAL TCP %s:%hd LOCAL UDP %s:%hd REMOTE TCP %s:%hd REMOTE UDP %s:%hd \ntime zone %d logdir %s\n",server, url[0], ip[LOCAL][TCP],port[LOCAL][TCP],ip[LOCAL][UDP],port[LOCAL][UDP],ip[REMOTE][TCP],port[REMOTE][TCP],ip[REMOTE][UDP],port[REMOTE][UDP],servertimezone,logdir);
 
 return flags;
 

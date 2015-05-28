@@ -123,7 +123,7 @@ void InitNodeStatus()
   ns.SvrType = svrtype;
 
   char posturl[URL_LEN]={0};
-  sprintf(posturl,"http://%s:%hd%s",server,port[TCP][REMOTE],url[0]);
+  sprintf(posturl,"http://%s:%hd%s",server,port[REMOTE][TCP],url[0]);
 
   struct curl_slist *header = NULL;
   header = curl_slist_append(header, "Transfer-Encoding: chunked");
