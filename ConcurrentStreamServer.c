@@ -28,37 +28,10 @@ struct my_struct {
 };
 static struct my_struct *users=NULL;
 
-struct tailq_entry_svrinit {
-    char value[HTTP_LEN];
-    char extra[HTTP_LEN];
-    struct my_struct *record;
-    TAILQ_ENTRY(tailq_entry_svrinit) tailq_entry;
-};
-TAILQ_HEAD(headname_svrinit, tailq_entry_svrinit) tailq_svrinit_head;
-
-struct tailq_entry_GetNodeSvrSysParmList {
-    char value[HTTP_LEN];
-    char extra[HTTP_LEN];
-    struct my_struct *record;
-    TAILQ_ENTRY(tailq_entry_GetNodeSvrSysParmList) tailq_entry;
-};
-TAILQ_HEAD(headname_GetNodeSvrSysParmList, tailq_entry_GetNodeSvrSysParmList) tailq_GetNodeSvrSysParmList_head;
-
-struct tailq_entry_ReportTaskStatus {
-    char value[HTTP_LEN];
-    char extra[HTTP_LEN];
-    struct my_struct *record;
-    TAILQ_ENTRY(tailq_entry_ReportTaskStatus) tailq_entry;
-};
-TAILQ_HEAD(headname_ReportTaskStatus, tailq_entry_ReportTaskStatus) tailq_ReportTaskStatus_head;
-
-struct tailq_entry_other {
-    char value[HTTP_LEN];
-    char extra[HTTP_LEN];
-    struct my_struct *record;
-    TAILQ_ENTRY(tailq_entry_other) tailq_entry;
-};
-TAILQ_HEAD(headname_other, tailq_entry_other) tailq_other_head;
+DEFINE_TAILQ(svrinit)
+DEFINE_TAILQ(GetNodeSvrSysParmList)
+DEFINE_TAILQ(ReportTaskStatus)
+DEFINE_TAILQ(other)
 
  //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
 static struct message message_response;

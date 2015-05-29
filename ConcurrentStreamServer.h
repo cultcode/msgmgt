@@ -3,6 +3,15 @@
 
 extern void* ConcurrentStreamServer(void *pipefd);
 
+#define DEFINE_TAILQ(type) \
+struct tailq_entry_##type { \
+    char value[HTTP_LEN]; \
+    char extra[HTTP_LEN]; \
+    struct my_struct *record; \
+    TAILQ_ENTRY(tailq_entry_##type) tailq_entry; \
+}; \
+TAILQ_HEAD(headname_##type, tailq_entry_##type) tailq_##type##_head;
+
 #define REMOVE_TAILQ(type) \
   if(!strcasecmp(key,#type)) { \
     item_##type = TAILQ_FIRST(&tailq_##type##_head); \
