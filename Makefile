@@ -1,6 +1,6 @@
 VERSION=\"1.0.$(shell date +%Y%m%d).$(shell date +%H%M)\"
 
-CFLAGS=-Wall -g
+CFLAGS=-Wall -g3
 
 HASHDIR = ../uthash/src
 CFLAGS += -I$(HASHDIR) -I/usr/include/libxml2 -I./openssl/include -L./openssl -DDEFAULT_DEBUGL=0

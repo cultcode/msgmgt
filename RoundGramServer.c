@@ -65,7 +65,7 @@ void *RoundGramServer(void *data)
     //cli -> me -> ser
     memset(buf,0,sizeof(buf));
     length = recvfrom(sockfd_me4cli, buf, sizeof(buf)-1, 0, (struct sockaddr *)&addr_cli, &addrlen);
-    log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=me2cli, sockfd=%d length=%d", sockfd_me4cli, length);
+    log4c_cdn(mycat, info, "TRANSMIT", "receiving <== me2cli=%d length=%d", sockfd_me4cli, length);
     handle_error_nn(length, 1, "TRANSMIT", "recvfrom() %s",strerror(errno));
 
     if(length == (sizeof(buf)-1)) {
@@ -77,7 +77,7 @@ void *RoundGramServer(void *data)
       log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
       length = sendto(sockfd_me4ser, buf, strlen(buf), 0, (struct sockaddr *)&addr_ser, addrlen);
-      log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=me2ser, sockfd=%d, length=%d", sockfd_me4ser,length);
+      log4c_cdn(mycat, info, "TRANSMIT", "sending ==> me2ser=%d, length=%d", sockfd_me4ser,length);
       handle_error_nn(length, 1, "TRANSMIT", "sendto %s",strerror(errno));
     }
 

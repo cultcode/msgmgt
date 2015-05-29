@@ -89,7 +89,7 @@ void *StreamClient(void *pipefd)
       memset(buf,0,sizeof(buf));
       length = read(sockfd_connect, buf, sizeof(buf)-1);
       handle_error_nn(length, 0, "TRANSMIT","read() %s",strerror(errno));
-      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=connect, sockfd=%d, length=%d", sockfd_connect, length);
+      log4c_cdn(mycat, info, "TRANSMIT", "receiving <== connect=%d, length=%d", sockfd_connect, length);
       log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
 
       if(length <= 0) {
@@ -108,7 +108,7 @@ void *StreamClient(void *pipefd)
         //deal with http packet
         length = write(resfd, buf, strlen(buf));
         handle_error_nn(length, 1, "TRANSMIT","write() %s",strerror(errno));
-        log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=resfd, sockfd=%d, length=%d", resfd,length);
+        log4c_cdn(mycat, info, "TRANSMIT", "sending ==> resfd=%d, length=%d", resfd,length);
       }
 
     }
@@ -117,7 +117,7 @@ void *StreamClient(void *pipefd)
       memset(buf,0,sizeof(buf));
       length = read(reqfd, buf, sizeof(buf)-1);
       handle_error_nn(length, 1, "TRANSMIT","read() %s",strerror(errno));
-      log4c_cdn(mycat, info, "TRANSMIT", "receiving packet, source=reqfd, sockfd=%d length=%d", reqfd, length);
+      log4c_cdn(mycat, info, "TRANSMIT", "receiving <== reqfd=%d length=%d", reqfd, length);
 
       if(length == 0) {
         ret = sd_close(reqfd);
@@ -138,7 +138,7 @@ void *StreamClient(void *pipefd)
 
         length = write(sockfd_connect, buf, strlen(buf));
         handle_error_nn(length, 1, "TRANSMIT","write() %s",strerror(errno));
-        log4c_cdn(mycat, info, "TRANSMIT", "sending packet, destination=connect, sockfd=%d, length=%d", sockfd_connect,length);
+        log4c_cdn(mycat, info, "TRANSMIT", "sending ==> connect=%d, length=%d", sockfd_connect,length);
         log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
       }
 
