@@ -43,20 +43,31 @@ TAILQ_HEAD(headname_##type, tailq_entry_##type) tailq_##type##_head;
 
 #define SEND_TAILQ_HEAD(type) \
     item_##type = TAILQ_FIRST(&tailq_##type##_head); \
-    if((item_##type != NULL) && (TAILQ_NEXT(item_##type, tailq_entry) == NULL) && ((s = item_##type->record) != NULL) && !s->sent && !((strstr(item_##type->value,"Expect:")) && !strlen(item_##type->extra)))  { \
+    if((item_##type != NULL) && ((s = item_##type->record) != NULL) && !s->sent && !((strlen(strstr(item_##type->value,"\r\n\r\n")) == 4) && !strlen(item_##type->extra)))  { \
       HASH_REPLACE_STR( users, name, s, tmp); \
       free(tmp); \
       log4c_cdn(mycat, debug, "HASH", "entry %s=>%d added into HASH", s->name, s->id); \
  \
-      length = write(reqfd, item_##type->value, strlen(item_##type->value)); \
-      handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno)); \
-      log4c_cdn(mycat, info, "TRANSMIT", "sending ==> reqfd=%d, length=%d", reqfd,length); \
+      if(!strlen(item_##type->extra) && strstr(item_##type->value,"Expect:")) { \
+        token = strdup(item_##type->value); \
+        strrpl(item_##type->value, token, "Expect: 100-continue\r\n", ""); \
+        free(token); \
+      } \
 \
-      length = write(reqfd, item_##type->extra, strlen(item_##type->extra)); \
-      handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno)); \
-      log4c_cdn(mycat, info, "TRANSMIT", "sending ==> reqfd=%d, length=%d", reqfd,length); \
+      if(strlen(item_##type->value)) { \
+        length = write(reqfd, item_##type->value, strlen(item_##type->value)); \
+        handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno)); \
+        log4c_cdn(mycat, info, "TRANSMIT", "sending ==> reqfd=%d, length=%d", reqfd,length); \
+      } \
+\
+      if(strlen(item_##type->extra)) { \
+        length = write(reqfd, item_##type->extra, strlen(item_##type->extra)); \
+        handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno)); \
+        log4c_cdn(mycat, info, "TRANSMIT", "sending ==> reqfd=%d, length=%d", reqfd,length); \
+      } \
+\
       s->sent = 1; \
       if(!strcmp(#type,"other")) TAILQ_REMOVE(&tailq_##type##_head, item_##type, tailq_entry); \
-    } 
+    }
 
 #endif

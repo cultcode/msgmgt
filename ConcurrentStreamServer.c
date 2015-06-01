@@ -173,7 +173,7 @@ void *ConcurrentStreamServer(void *pipefd)
             log4c_cdn(mycat, info, "TRANSMIT", "sending ==> connect=%d, length=%d", sockfd_connect,length);
             log4c_cdn(mycat, debug, "TRANSMIT", "Packet content is\n%s",buf);
             length = write(sockfd_connect,buf,strlen(buf));
-            handle_error_nn(length, 1, "TRANSMIT", "write() %s",strerror(errno));
+            handle_error_nn(length, 0, "TRANSMIT", "write() %s",strerror(errno));
           }
         }
 
