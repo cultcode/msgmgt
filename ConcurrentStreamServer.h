@@ -48,9 +48,15 @@ TAILQ_HEAD(headname_##type, tailq_entry_##type) tailq_##type##_head;
       free(tmp); \
       log4c_cdn(mycat, debug, "HASH", "entry %s=>%d added into HASH", s->name, s->id); \
  \
-      if(!strlen(item_##type->extra) && strstr(item_##type->value,"Expect:")) { \
+      if(strstr(item_##type->value,"Expect:") && !strlen(item_##type->extra)) { \
         token = strdup(item_##type->value); \
         strrpl(item_##type->value, token, "Expect: 100-continue\r\n", ""); \
+        free(token); \
+      } \
+ \
+      if(!strstr(item_##type->value,"Expect:") && strlen(item_##type->extra)) { \
+        token = strdup(item_##type->value); \
+        strrpl(item_##type->value, token, "Connection:", "Expect: 100-continue\r\nConnection:"); \
         free(token); \
       } \
 \
